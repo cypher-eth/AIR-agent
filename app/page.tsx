@@ -20,9 +20,14 @@ export default function Home() {
   const [audioAmplitude, setAudioAmplitude] = useState(0);
 
   const handleVoiceInput = async (transcript: string) => {
-    if (!transcript.trim()) return;
+    console.log('Received voice input:', transcript);
+    if (!transcript.trim()) {
+      console.log('Empty transcript, ignoring');
+      return;
+    }
 
     try {
+      console.log('Sending to API...');
       const response = await fetch('/api/ai/voice', {
         method: 'POST',
         headers: {
@@ -36,6 +41,7 @@ export default function Home() {
       }
 
       const aiResponse: AIResponse = await response.json();
+      console.log('AI Response:', aiResponse);
       setCurrentResponse(aiResponse.responseText);
 
       // Play audio response
@@ -60,6 +66,7 @@ export default function Home() {
         await audio.play();
       } else {
         // Use Web Speech API for text-to-speech
+        console.log('Playing text-to-speech...');
         setIsSpeaking(true);
         await playTextToSpeech(aiResponse.responseText, (amplitude) => {
           setAudioAmplitude(amplitude);
@@ -112,6 +119,19 @@ export default function Home() {
           isListening={isListening}
           setIsListening={setIsListening}
         />
+        
+        {/* Debug Test Button */}
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => {
+              console.log('Test button clicked');
+              handleVoiceInput('Test message from debug button');
+            }}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            Test Voice Input
+          </button>
+        </div>
       </div>
     </main>
   );
