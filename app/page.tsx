@@ -15,6 +15,7 @@ export interface AIResponse {
 
 export default function Home() {
   const [isListening, setIsListening] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentResponse, setCurrentResponse] = useState<string>('');
   const [audioAmplitude, setAudioAmplitude] = useState(0);
@@ -109,8 +110,9 @@ export default function Home() {
       {/* AI Avatar Sphere */}
       <div className="flex-1 flex items-center justify-center">
         <Sphere 
-          isIdle={!isListening && !isSpeaking}
+          isIdle={!isHolding && !isSpeaking}
           isSpeaking={isSpeaking}
+          isListening={isHolding}
           amplitude={audioAmplitude}
         />
       </div>
@@ -131,7 +133,9 @@ export default function Home() {
         <VoiceButton
           onVoiceInput={handleVoiceInput}
           isListening={isListening}
+          isHolding={isHolding}
           setIsListening={setIsListening}
+          setIsHolding={setIsHolding}
         />
         
         {/* Debug Test Button */}

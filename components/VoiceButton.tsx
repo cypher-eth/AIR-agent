@@ -6,13 +6,14 @@ import { Mic, MicOff, Play, Square } from 'lucide-react';
 interface VoiceButtonProps {
   onVoiceInput: (transcript: string, audioBlob?: Blob) => void;
   isListening: boolean;
+  isHolding: boolean;
   setIsListening: (listening: boolean) => void;
+  setIsHolding: (holding: boolean) => void;
 }
 
-export function VoiceButton({ onVoiceInput, isListening, setIsListening }: VoiceButtonProps) {
+export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListening, setIsHolding }: VoiceButtonProps) {
   const [isSupported, setIsSupported] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [isHolding, setIsHolding] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasRecording, setHasRecording] = useState(false);
@@ -65,14 +66,12 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
       
       recognition.onend = () => {
         console.log('Speech recognition ended');
-        // Add a small delay to prevent immediate reset
-        setTimeout(() => {
-          setIsListening(false);
-          if (finalTranscriptRef.current.trim() && !isHoldingRef.current) {
-            console.log('Sending transcript:', finalTranscriptRef.current);
-            onVoiceInput(finalTranscriptRef.current, audioBlobRef.current || undefined);
-          }
-        }, 100);
+        setIsListening(false);
+        // Only send transcript if we're not holding (button was released)
+        if (finalTranscriptRef.current.trim() && !isHoldingRef.current) {
+          console.log('Sending transcript:', finalTranscriptRef.current);
+          onVoiceInput(finalTranscriptRef.current, audioBlobRef.current || undefined);
+        }
       };
       
       recognition.onerror = (event: any) => {
@@ -119,6 +118,12 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
         
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
+        
+        // Send transcript and audio if button was released
+        if (!isHoldingRef.current && finalTranscriptRef.current.trim()) {
+          console.log('Sending transcript from audio recording:', finalTranscriptRef.current);
+          onVoiceInput(finalTranscriptRef.current, audioBlob);
+        }
       };
       
       mediaRecorderRef.current = mediaRecorder;
@@ -161,37 +166,42 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
   }, [hasRecording]);
 
   const startListening = useCallback(() => {
+    console.log('Starting to listen...');
+    isHoldingRef.current = true;
+    setIsHolding(true);
+    
+    // Clear previous transcript
+    setTranscript('');
+    finalTranscriptRef.current = '';
+    
     if (recognitionRef.current && isSupported) {
-      console.log('Starting to listen...');
-      isHoldingRef.current = true;
       try {
-        // Only start if not already listening
-        if (!isListening) {
-          recognitionRef.current.start();
-        }
+        // Start speech recognition
+        recognitionRef.current.start();
         // Start audio recording
         startAudioRecording();
       } catch (error) {
         console.error('Error starting speech recognition:', error);
         setIsListening(false);
         isHoldingRef.current = false;
+        setIsHolding(false);
       }
     } else if (!isSupported) {
       console.log('Speech recognition not supported');
       // Still try to record audio even without speech recognition
       startAudioRecording();
     }
-  }, [isSupported, setIsListening, isListening, startAudioRecording]);
+  }, [isSupported, setIsListening, startAudioRecording, setIsHolding]);
 
   const stopListening = useCallback(() => {
+    console.log('Stopping listening...');
+    isHoldingRef.current = false;
+    setIsHolding(false);
+    
     if (recognitionRef.current && isSupported) {
-      console.log('Stopping listening...');
-      isHoldingRef.current = false;
       try {
-        // Only stop if currently listening
-        if (isListening) {
-          recognitionRef.current.stop();
-        }
+        // Stop speech recognition
+        recognitionRef.current.stop();
         // Stop audio recording
         stopAudioRecording();
       } catch (error) {
@@ -202,46 +212,41 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
       // Stop audio recording even without speech recognition
       stopAudioRecording();
     }
-  }, [isSupported, setIsListening, isListening, stopAudioRecording]);
+  }, [isSupported, setIsListening, stopAudioRecording, setIsHolding]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     console.log('Mouse down - starting to listen');
-    setIsHolding(true);
     startListening();
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
     e.preventDefault();
     console.log('Mouse up - stopping listening');
-    setIsHolding(false);
     stopListening();
   };
 
   const handleMouseLeave = (e: React.MouseEvent) => {
     e.preventDefault();
     console.log('Mouse leave - stopping listening');
-    setIsHolding(false);
     stopListening();
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     e.preventDefault();
     console.log('Touch start - starting to listen');
-    setIsHolding(true);
     startListening();
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     e.preventDefault();
     console.log('Touch end - stopping listening');
-    setIsHolding(false);
     stopListening();
   };
 
   // Fallback for unsupported browsers or testing
   const handleClick = () => {
-    console.log('Button clicked, isSupported:', isSupported, 'isListening:', isListening);
+    console.log('Button clicked, isSupported:', isSupported, 'isHolding:', isHolding);
     
     if (!isSupported) {
       // For testing purposes, simulate a voice input
@@ -251,7 +256,7 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
       return;
     }
     
-    if (isListening) {
+    if (isHolding) {
       stopListening();
     } else {
       startListening();
