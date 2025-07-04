@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Sphere } from '@/components/Sphere';
 import { VoiceButton } from '@/components/VoiceButton';
 import { playTextToSpeech } from '@/lib/audio';
+import { Play, Square } from 'lucide-react';
 
 export type ResponseType = 'info' | 'quiz' | 'correct';
 
@@ -19,11 +20,26 @@ export default function Home() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentResponse, setCurrentResponse] = useState<string>('');
   const [audioAmplitude, setAudioAmplitude] = useState(0);
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const handleVoiceInput = async (transcript: string, audioBlob?: Blob) => {
     console.log('Received voice input:', transcript);
+    console.log('Audio blob received:', audioBlob ? `Size: ${audioBlob.size}, Type: ${audioBlob.type}` : 'No audio blob');
+    // If audioBlob is present, create a URL for playback
+    if (audioBlob) {
+      console.log('Creating recording URL from audio blob...');
+      if (recordingUrl) {
+        URL.revokeObjectURL(recordingUrl);
+      }
+      const newRecordingUrl = URL.createObjectURL(audioBlob);
+      console.log('New recording URL created:', newRecordingUrl);
+      setRecordingUrl(newRecordingUrl);
+    }
+
+    // Only proceed with AI processing if there's a transcript
     if (!transcript.trim()) {
-      console.log('Empty transcript, ignoring');
+      console.log('Empty transcript, skipping AI processing');
       return;
     }
 
@@ -110,10 +126,8 @@ export default function Home() {
       {/* AI Avatar Sphere */}
       <div className="flex-1 flex items-center justify-center">
         <Sphere 
-          isIdle={!isHolding && !isSpeaking}
-          isSpeaking={isSpeaking}
-          isListening={isHolding}
           amplitude={audioAmplitude}
+          onVoiceInput={handleVoiceInput}
         />
       </div>
 
@@ -128,29 +142,43 @@ export default function Home() {
         </div>
       )}
 
-      {/* Voice Input Button */}
-      <div className="mb-8">
-        <VoiceButton
-          onVoiceInput={handleVoiceInput}
-          isListening={isListening}
-          isHolding={isHolding}
-          setIsListening={setIsListening}
-          setIsHolding={setIsHolding}
-        />
-        
-        {/* Debug Test Button */}
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => {
-              console.log('Test button clicked');
-              handleVoiceInput('Test message from debug button');
-            }}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            Test Voice Input
-          </button>
-        </div>
-      </div>
+      {/* Play Button for last recording */}
+        <button
+          className={`
+            relative w-20 h-20 rounded-full font-medium text-white
+            transition-all duration-200 transform
+            ${!recordingUrl
+              ? 'bg-gray-400 cursor-not-allowed shadow-lg shadow-gray-400/50'
+              : isPlaying
+                ? 'bg-green-500 hover:bg-green-600 scale-110 shadow-lg shadow-green-500/50' 
+                : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/50'
+            }
+            cursor-pointer
+            active:scale-95
+            mb-8
+          `}
+          onClick={async () => {
+            if (recordingUrl && !isPlaying) {
+              const audio = new Audio(recordingUrl);
+              setIsPlaying(true);
+              audio.onended = () => setIsPlaying(false);
+              audio.onerror = () => setIsPlaying(false);
+              await audio.play().catch(() => setIsPlaying(false));
+            }
+          }}
+          disabled={isPlaying || !recordingUrl}
+        >
+          {isPlaying ? (
+            <Square className="w-8 h-8 mx-auto" />
+          ) : (
+            <Play className="w-8 h-8 mx-auto" />
+          )}
+          {(isPlaying || !recordingUrl) && (
+            <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-20" />
+          )}
+        </button>
+
+      {/* Play button and other controls will be added here after moving record logic to Sphere */}
     </main>
   );
 } 

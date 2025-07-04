@@ -1,17 +1,15 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 interface SphereProps {
-  isIdle: boolean;
-  isSpeaking: boolean;
-  isListening: boolean; // This now represents the holding state
   amplitude: number;
+  onVoiceInput: (transcript: string, audioBlob?: Blob) => void;
 }
 
-function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: SphereProps) {
+function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: { isIdle: boolean; isSpeaking: boolean; isListening: boolean; amplitude: number; }) {
   const meshRef = useRef<THREE.Mesh>(null);
 
   useFrame((state) => {
@@ -67,9 +65,180 @@ function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: SpherePr
   );
 }
 
-export function Sphere({ isIdle, isSpeaking, isListening, amplitude }: SphereProps) {
+export function Sphere({ amplitude, onVoiceInput }: SphereProps) {
+  const [isIdle, setIsIdle] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioBlobRef = useRef<Blob | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const isHoldingRef = useRef(false);
+  const finalTranscriptRef = useRef('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
+      setIsSupported(true);
+      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
+      recognition.onstart = () => {
+        setIsListening(true);
+        setIsIdle(false);
+        finalTranscriptRef.current = '';
+      };
+      recognition.onresult = (event: any) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        finalTranscriptRef.current = finalTranscript;
+      };
+      recognition.onend = () => {
+        if (isHoldingRef.current) {
+          // User is still holding, so restart recognition
+          try {
+            recognition.start();
+          } catch (e) {
+            // Optionally handle error
+          }
+          return;
+        }
+        setIsListening(false);
+        setIsIdle(true);
+        onVoiceInput(finalTranscriptRef.current, audioBlobRef.current || undefined);
+      };
+      recognition.onerror = (event: any) => {
+        setIsListening(false);
+        setIsIdle(true);
+      };
+      recognitionRef.current = recognition;
+    }
+    return () => {
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+      }
+    };
+  }, [onVoiceInput]);
+
+  const startAudioRecording = useCallback(async () => {
+    try {
+      console.log('Starting audio recording...');
+      
+      // Prevent multiple recordings
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        console.log('Already recording audio, skipping');
+        return;
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('Got audio stream:', stream);
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+      mediaRecorder.ondataavailable = (event) => {
+        console.log('Data available, size:', event.data.size);
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        console.log('Audio recording stopped, blob size:', audioBlob.size);
+        audioBlobRef.current = audioBlob;
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current);
+        }
+        audioUrlRef.current = URL.createObjectURL(audioBlob);
+        console.log('Audio URL created:', audioUrlRef.current);
+        stream.getTracks().forEach(track => track.stop());
+        if (!isHoldingRef.current) {
+          console.log('Calling onVoiceInput with transcript:', finalTranscriptRef.current, 'and audio blob size:', audioBlob.size);
+          onVoiceInput(finalTranscriptRef.current, audioBlob);
+        }
+      };
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = audioChunks;
+      mediaRecorder.start();
+    } catch (error) {
+      // handle error
+    }
+  }, [onVoiceInput]);
+
+  const stopAudioRecording = useCallback(() => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    console.log('Pointer down - starting recording');
+    e.preventDefault();
+    
+    // Prevent multiple starts
+    if (isHoldingRef.current) {
+      console.log('Already recording, ignoring pointer down');
+      return;
+    }
+    
+    isHoldingRef.current = true;
+    setIsListening(true);
+    setIsIdle(false);
+    if (recognitionRef.current && isSupported) {
+      try {
+        // Check if recognition is already active
+        if (recognitionRef.current.state === 'inactive') {
+          recognitionRef.current.start();
+        }
+        startAudioRecording();
+      } catch (error) {
+        console.error('Error starting recognition:', error);
+        setIsListening(false);
+        setIsIdle(true);
+        isHoldingRef.current = false;
+      }
+    } else if (!isSupported) {
+      startAudioRecording();
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    console.log('Pointer up - stopping recording');
+    e.preventDefault();
+    isHoldingRef.current = false;
+    setIsListening(false);
+    setIsIdle(true);
+    if (recognitionRef.current && isSupported) {
+      try {
+        recognitionRef.current.stop();
+        stopAudioRecording();
+      } catch (error) {
+        console.error('Error stopping recognition:', error);
+        setIsListening(false);
+        setIsIdle(true);
+      }
+    } else {
+      stopAudioRecording();
+    }
+  };
+
   return (
-    <div className="w-80 h-80 relative">
+    <div className="w-80 h-80 relative select-none"
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      >
       <Canvas
         camera={{ position: [0, 0, 3], fov: 50 }}
         style={{ background: 'transparent' }}

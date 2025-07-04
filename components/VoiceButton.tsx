@@ -106,21 +106,23 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
       };
       
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        console.log('Audio blob size:', audioBlob.size);
         audioBlobRef.current = audioBlob;
-        
+
         // Create URL for the audio blob
         if (audioUrlRef.current) {
           URL.revokeObjectURL(audioUrlRef.current);
         }
         audioUrlRef.current = URL.createObjectURL(audioBlob);
-        
+        console.log('Audio URL:', audioUrlRef.current);
+
         setHasRecording(true);
         setIsRecording(false);
-        
+
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
-        
+
         // Send transcript and audio if button was released
         if (!isHoldingRef.current && finalTranscriptRef.current.trim()) {
           console.log('Sending transcript from audio recording:', finalTranscriptRef.current);
@@ -257,45 +259,6 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
   return (
     <div className="flex flex-col items-center space-y-4">
       <div className="flex items-center space-x-4">
-        {/* Record Button */}
-        <button
-          className={`
-            relative w-20 h-20 rounded-full font-medium text-white
-            transition-all duration-200 transform
-            ${isListening || isHolding || isRecording
-              ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-lg shadow-red-500/50' 
-              : 'bg-primary hover:bg-primary-dark shadow-lg shadow-primary/50'
-            }
-            cursor-pointer
-            active:scale-95
-          `}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onClick={handleClick}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <span className="w-8 h-8 mx-auto flex items-center justify-center">
-              <svg className="animate-spin h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-              </svg>
-            </span>
-          ) : isListening || isRecording ? (
-            <MicOff className="w-8 h-8 mx-auto" />
-          ) : (
-            <Mic className="w-8 h-8 mx-auto" />
-          )}
-          
-          {/* Pulse animation when listening, holding, or recording */}
-          {(isListening || isHolding || isRecording) && (
-            <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-20" />
-          )}
-        </button>
-
         {/* Play Button */}
         {hasRecording && (
           <button
