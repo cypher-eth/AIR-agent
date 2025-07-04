@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic, MicOff, Play, Square } from 'lucide-react';
 
 interface VoiceButtonProps {
-  onVoiceInput: (transcript: string) => void;
+  onVoiceInput: (transcript: string, audioBlob?: Blob) => void;
   isListening: boolean;
   setIsListening: (listening: boolean) => void;
 }
@@ -13,11 +13,18 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
   const [isSupported, setIsSupported] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [isHolding, setIsHolding] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [hasRecording, setHasRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioBlobRef = useRef<Blob | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
   const isHoldingRef = useRef(false);
   const finalTranscriptRef = useRef('');
 
-  // Initialize speech recognition
+  // Initialize speech recognition and audio recording
   useEffect(() => {
     // Check if Web Speech API is supported
     if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
@@ -63,7 +70,7 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
           setIsListening(false);
           if (finalTranscriptRef.current.trim() && !isHoldingRef.current) {
             console.log('Sending transcript:', finalTranscriptRef.current);
-            onVoiceInput(finalTranscriptRef.current);
+            onVoiceInput(finalTranscriptRef.current, audioBlobRef.current || undefined);
           }
         }, 100);
       };
@@ -75,7 +82,83 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
       
       recognitionRef.current = recognition;
     }
+
+    // Cleanup function
+    return () => {
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+      }
+    };
   }, [onVoiceInput, setIsListening]);
+
+  // Audio recording functions
+  const startAudioRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        audioBlobRef.current = audioBlob;
+        
+        // Create URL for the audio blob
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current);
+        }
+        audioUrlRef.current = URL.createObjectURL(audioBlob);
+        
+        setHasRecording(true);
+        setIsRecording(false);
+        
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = audioChunks;
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      console.log('Audio recording started');
+    } catch (error) {
+      console.error('Error starting audio recording:', error);
+    }
+  }, []);
+
+  const stopAudioRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      console.log('Audio recording stopped');
+    }
+  }, [isRecording]);
+
+  const playRecording = useCallback(() => {
+    if (audioUrlRef.current && hasRecording) {
+      const audio = new Audio(audioUrlRef.current);
+      setIsPlaying(true);
+      
+      audio.onended = () => {
+        setIsPlaying(false);
+      };
+      
+      audio.onerror = () => {
+        setIsPlaying(false);
+        console.error('Error playing audio');
+      };
+      
+      audio.play().catch(error => {
+        console.error('Error playing audio:', error);
+        setIsPlaying(false);
+      });
+    }
+  }, [hasRecording]);
 
   const startListening = useCallback(() => {
     if (recognitionRef.current && isSupported) {
@@ -86,6 +169,8 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
         if (!isListening) {
           recognitionRef.current.start();
         }
+        // Start audio recording
+        startAudioRecording();
       } catch (error) {
         console.error('Error starting speech recognition:', error);
         setIsListening(false);
@@ -93,8 +178,10 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
       }
     } else if (!isSupported) {
       console.log('Speech recognition not supported');
+      // Still try to record audio even without speech recognition
+      startAudioRecording();
     }
-  }, [isSupported, setIsListening, isListening]);
+  }, [isSupported, setIsListening, isListening, startAudioRecording]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current && isSupported) {
@@ -105,12 +192,17 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
         if (isListening) {
           recognitionRef.current.stop();
         }
+        // Stop audio recording
+        stopAudioRecording();
       } catch (error) {
         console.error('Error stopping speech recognition:', error);
         setIsListening(false);
       }
+    } else {
+      // Stop audio recording even without speech recognition
+      stopAudioRecording();
     }
-  }, [isSupported, setIsListening, isListening]);
+  }, [isSupported, setIsListening, isListening, stopAudioRecording]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -155,7 +247,7 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
       // For testing purposes, simulate a voice input
       const testTranscript = 'Hello, this is a test message';
       console.log('Simulating voice input:', testTranscript);
-      onVoiceInput(testTranscript);
+      onVoiceInput(testTranscript, audioBlobRef.current || undefined);
       return;
     }
     
@@ -168,43 +260,80 @@ export function VoiceButton({ onVoiceInput, isListening, setIsListening }: Voice
 
   return (
     <div className="flex flex-col items-center space-y-4">
-      <button
-        className={`
-          relative w-20 h-20 rounded-full font-medium text-white
-          transition-all duration-200 transform
-          ${isListening || isHolding
-            ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-lg shadow-red-500/50' 
-            : 'bg-primary hover:bg-primary-dark shadow-lg shadow-primary/50'
-          }
-          cursor-pointer
-          active:scale-95
-        `}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onClick={handleClick}
-      >
-        {isListening ? (
-          <MicOff className="w-8 h-8 mx-auto" />
-        ) : (
-          <Mic className="w-8 h-8 mx-auto" />
+      <div className="flex items-center space-x-4">
+        {/* Record Button */}
+        <button
+          className={`
+            relative w-20 h-20 rounded-full font-medium text-white
+            transition-all duration-200 transform
+            ${isListening || isHolding || isRecording
+              ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-lg shadow-red-500/50' 
+              : 'bg-primary hover:bg-primary-dark shadow-lg shadow-primary/50'
+            }
+            cursor-pointer
+            active:scale-95
+          `}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onClick={handleClick}
+        >
+          {isListening || isRecording ? (
+            <MicOff className="w-8 h-8 mx-auto" />
+          ) : (
+            <Mic className="w-8 h-8 mx-auto" />
+          )}
+          
+          {/* Pulse animation when listening, holding, or recording */}
+          {(isListening || isHolding || isRecording) && (
+            <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-20" />
+          )}
+        </button>
+
+        {/* Play Button */}
+        {hasRecording && (
+          <button
+            className={`
+              relative w-20 h-20 rounded-full font-medium text-white
+              transition-all duration-200 transform
+              ${isPlaying
+                ? 'bg-green-500 hover:bg-green-600 scale-110 shadow-lg shadow-green-500/50' 
+                : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/50'
+              }
+              cursor-pointer
+              active:scale-95
+            `}
+            onClick={playRecording}
+            disabled={isPlaying}
+          >
+            {isPlaying ? (
+              <Square className="w-8 h-8 mx-auto" />
+            ) : (
+              <Play className="w-8 h-8 mx-auto" />
+            )}
+            
+            {/* Pulse animation when playing */}
+            {isPlaying && (
+              <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-20" />
+            )}
+          </button>
         )}
-        
-        {/* Pulse animation when listening or holding */}
-        {(isListening || isHolding) && (
-          <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-20" />
-        )}
-      </button>
+      </div>
       
       <div className="text-center">
         <p className="text-lg font-medium">
-          {isListening ? '🎙️ Listening...' : isHolding ? '🎙️ Holding...' : '🎙️ Hold to Talk'}
+          {isListening ? '🎙️ Listening...' : isRecording ? '🎙️ Recording...' : isHolding ? '🎙️ Holding...' : '🎙️ Hold to Talk'}
         </p>
         {!isSupported && (
           <p className="text-sm text-yellow-400 mt-1">
             Click to test (simulated input)
+          </p>
+        )}
+        {hasRecording && (
+          <p className="text-sm text-green-400 mt-1">
+            {isPlaying ? 'Playing recording...' : 'Click play to hear your recording'}
           </p>
         )}
       </div>

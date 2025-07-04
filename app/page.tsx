@@ -19,7 +19,7 @@ export default function Home() {
   const [currentResponse, setCurrentResponse] = useState<string>('');
   const [audioAmplitude, setAudioAmplitude] = useState(0);
 
-  const handleVoiceInput = async (transcript: string) => {
+  const handleVoiceInput = async (transcript: string, audioBlob?: Blob) => {
     console.log('Received voice input:', transcript);
     if (!transcript.trim()) {
       console.log('Empty transcript, ignoring');
@@ -28,12 +28,26 @@ export default function Home() {
 
     try {
       console.log('Sending to API...');
+      
+      // Convert audio blob to base64 if available
+      let audioBlobBase64 = null;
+      if (audioBlob) {
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
+        audioBlobBase64 = btoa(binaryString);
+        console.log('Audio blob converted to base64, size:', audioBlobBase64.length);
+      }
+
       const response = await fetch('/api/ai/voice', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ transcript }),
+        body: JSON.stringify({ 
+          transcript,
+          audioBlob: audioBlobBase64 
+        }),
       });
 
       if (!response.ok) {

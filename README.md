@@ -5,6 +5,7 @@ An interactive AI support application featuring voice interface, 3D animated ava
 ## ✨ Features
 
 - 🎙️ **Voice Interface**: Push-to-talk functionality using Web Speech API
+- 🎵 **Audio Recording**: Record and playback your voice input
 - 🎯 **3D Animated Avatar**: Interactive floating sphere that responds to voice
 - 🤖 **AI Integration**: Ready for n8n workflow integration
 - 🔗 **Web3 Integration**: Wallet connection and smart contract interactions
@@ -91,15 +92,149 @@ An interactive AI support application featuring voice interface, 3D animated ava
 
 ### n8n Integration
 
-Replace the mock API logic in `app/api/ai/voice/route.ts` with your actual n8n workflow:
+The app is now fully integrated with n8n workflows! Here's how to set it up:
 
-```typescript
-const response = await fetch(process.env.N8N_WORKFLOW_URL!, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ transcript })
-});
+#### 1. Set Up Your N8N Workflow
+
+1. **Install n8n** (if not already installed):
+   ```bash
+   npm install -g n8n
+   # or
+   docker run -it --rm --name n8n -p 5678:5678 n8nio/n8n
+   ```
+
+2. **Create a New Workflow**:
+   - Open n8n at `http://localhost:5678`
+   - Click "New Workflow"
+   - Add a "Webhook" trigger node
+   - Configure the webhook URL (copy this URL for your `.env.local`)
+
+3. **Configure the Webhook Node**:
+   - Set HTTP Method to `POST`
+   - Set Response Mode to `Respond to Webhook`
+   - The webhook will receive this JSON payload:
+   ```json
+   {
+     "transcript": "string",
+     "timestamp": "string",
+     "sessionId": "string",
+     "userAgent": "string",
+     "audioData": "string (base64) | null"
+   }
+   ```
+
+4. **Add AI Processing Nodes**:
+   - **HTTP Request Node** (for OpenAI API):
+     - Method: `POST`
+     - URL: `https://api.openai.com/v1/chat/completions`
+     - Headers: `Authorization: Bearer YOUR_OPENAI_API_KEY`
+     - Body:
+     ```json
+     {
+       "model": "gpt-3.5-turbo",
+       "messages": [
+         {
+           "role": "system",
+           "content": "You are a helpful AI assistant. Respond to user queries and ask quiz questions about geography. When the user answers correctly, respond with responseType: 'correct'."
+         },
+         {
+           "role": "user",
+           "content": "{{ $json.transcript }}"
+         }
+       ],
+       "max_tokens": 150
+     }
+     ```
+
+   - **Set Node** (to format response):
+     - Set the following values:
+     ```json
+     {
+       "responseText": "{{ $json.choices[0].message.content }}",
+       "responseType": "info",
+       "metadata": {
+         "model": "gpt-3.5-turbo",
+         "timestamp": "{{ $now }}"
+       }
+     }
+     ```
+
+5. **Add Response Logic**:
+   - **IF Node** (to check for correct answers):
+     - Condition: `{{ $json.responseText.toLowerCase().includes('correct') || $json.responseText.toLowerCase().includes('right') }}`
+     - If true: Set `responseType` to `"correct"`
+     - If false: Set `responseType` to `"info"`
+
+6. **Final Response Node**:
+   - Connect all nodes to a final "Respond to Webhook" node
+   - Set the response body to:
+   ```json
+   {
+     "responseText": "{{ $json.responseText }}",
+     "responseType": "{{ $json.responseType }}",
+     "responseAudioUrl": "{{ $json.responseAudioUrl }}",
+     "metadata": "{{ $json.metadata }}"
+   }
+   ```
+
+#### 2. Environment Configuration
+
+Add the following to your `.env.local`:
+
+```bash
+# N8N Workflow URL (replace with your actual webhook URL)
+N8N_WORKFLOW_URL=https://your-n8n-instance.com/webhook/your-workflow-id
+
+# Optional: N8N API Key (if using authentication)
+N8N_API_KEY=your-n8n-api-key
 ```
+
+#### 3. Test Your Integration
+
+Test the webhook with curl:
+
+```bash
+curl -X POST https://your-n8n-instance.com/webhook/your-workflow-id \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transcript": "Hello, what is the capital of France?",
+    "timestamp": "2024-01-01T00:00:00.000Z",
+    "sessionId": "test-session",
+    "userAgent": "test-agent",
+    "audioData": null
+  }'
+```
+
+Expected response:
+```json
+{
+  "responseText": "The capital of France is Paris. Would you like me to ask you a question about it?",
+  "responseType": "info",
+  "metadata": {
+    "model": "gpt-3.5-turbo",
+    "timestamp": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+The app will automatically fall back to local processing if the n8n workflow is unavailable.
+
+#### 4. Quick Start with Import
+
+For a quick setup, you can import the provided workflow:
+
+1. **Import the Workflow**:
+   - In n8n, go to "Workflows" → "Import from File"
+   - Select the `n8n-workflow-example.json` file from this repository
+   - The workflow will be imported with all nodes configured
+
+2. **Set Environment Variables in n8n**:
+   - Go to "Settings" → "Variables"
+   - Add `OPENAI_API_KEY` with your OpenAI API key
+
+3. **Activate the Workflow**:
+   - Click "Activate" to make the webhook live
+   - Copy the webhook URL and add it to your `.env.local`
 
 ### Smart Contract Integration
 
