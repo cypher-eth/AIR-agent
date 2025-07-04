@@ -12,7 +12,6 @@ interface SphereProps {
 
 function AnimatedSphere({ isIdle, isSpeaking, amplitude }: SphereProps) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
 
   useFrame((state) => {
     if (!meshRef.current) return;
@@ -38,45 +37,19 @@ function AnimatedSphere({ isIdle, isSpeaking, amplitude }: SphereProps) {
       // Add some wobble
       meshRef.current.rotation.x = Math.sin(time * 3) * 0.1;
     }
-
-    // Update material properties
-    if (materialRef.current) {
-      if (isSpeaking) {
-        materialRef.current.emissive.setHex(0x4f46e5);
-        materialRef.current.emissiveIntensity = amplitude * 0.5;
-      } else {
-        materialRef.current.emissive.setHex(0x000000);
-        materialRef.current.emissiveIntensity = 0;
-      }
-    }
   });
 
   return (
     <mesh ref={meshRef} position={[0, 0, 0]}>
-      <sphereGeometry args={[1, 64, 64]} />
+      <sphereGeometry args={[1, 32, 32]} />
       <meshStandardMaterial
-        ref={materialRef}
-        color="#6366f1"
+        color={isSpeaking ? "#4f46e5" : "#6366f1"}
         roughness={0.1}
         metalness={0.8}
-        emissive="#000000"
-        emissiveIntensity={0}
+        emissive={isSpeaking ? "#4f46e5" : "#000000"}
+        emissiveIntensity={isSpeaking ? amplitude * 0.5 : 0}
       />
     </mesh>
-  );
-}
-
-function Scene({ isIdle, isSpeaking, amplitude }: SphereProps) {
-  return (
-    <>
-      {/* Lights */}
-      <ambientLight intensity={0.5} />
-      <pointLight position={[10, 10, 10]} intensity={1} />
-      <pointLight position={[-10, -10, -10]} intensity={0.5} color="#8b5cf6" />
-      
-      {/* Animated Sphere */}
-      <AnimatedSphere isIdle={isIdle} isSpeaking={isSpeaking} amplitude={amplitude} />
-    </>
   );
 }
 
@@ -87,7 +60,11 @@ export function Sphere({ isIdle, isSpeaking, amplitude }: SphereProps) {
         camera={{ position: [0, 0, 3], fov: 50 }}
         style={{ background: 'transparent' }}
       >
-        <Scene isIdle={isIdle} isSpeaking={isSpeaking} amplitude={amplitude} />
+        <ambientLight intensity={0.5} />
+        <pointLight position={[10, 10, 10]} intensity={1} />
+        <pointLight position={[-10, -10, -10]} intensity={0.5} color="#8b5cf6" />
+        
+        <AnimatedSphere isIdle={isIdle} isSpeaking={isSpeaking} amplitude={amplitude} />
       </Canvas>
       
       {/* Glow effect */}

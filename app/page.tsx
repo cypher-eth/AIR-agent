@@ -1,10 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Sphere } from '@/components/Sphere';
 import { VoiceButton } from '@/components/VoiceButton';
-import { Modal } from '@/components/Modal';
-import { WagmiProvider } from '@/components/WagmiProvider';
 import { playTextToSpeech } from '@/lib/audio';
 
 export type ResponseType = 'info' | 'quiz' | 'correct';
@@ -18,7 +16,6 @@ export interface AIResponse {
 export default function Home() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [showModal, setShowModal] = useState(false);
   const [currentResponse, setCurrentResponse] = useState<string>('');
   const [audioAmplitude, setAudioAmplitude] = useState(0);
 
@@ -71,9 +68,9 @@ export default function Home() {
         setAudioAmplitude(0);
       }
 
-      // Show congratulations modal if answer is correct
+      // Show congratulations message if answer is correct
       if (aiResponse.responseType === 'correct') {
-        setShowModal(true);
+        alert('🎉 Congratulations! You answered correctly!');
       }
     } catch (error) {
       console.error('Error processing voice input:', error);
@@ -87,45 +84,35 @@ export default function Home() {
   };
 
   return (
-    <WagmiProvider>
-      <main className="min-h-screen flex flex-col items-center justify-center p-4">
-        {/* AI Avatar Sphere */}
-        <div className="flex-1 flex items-center justify-center">
-          <Sphere 
-            isIdle={!isListening && !isSpeaking}
-            isSpeaking={isSpeaking}
-            amplitude={audioAmplitude}
-          />
-        </div>
-
-        {/* Response Text Display */}
-        {currentResponse && (
-          <div className="w-full max-w-2xl mx-4 mb-8">
-            <div className="bg-black/20 backdrop-blur-sm rounded-lg p-4 border border-white/10">
-              <p className="text-center text-lg leading-relaxed">
-                {currentResponse}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Voice Input Button */}
-        <div className="mb-8">
-          <VoiceButton
-            onVoiceInput={handleVoiceInput}
-            isListening={isListening}
-            setIsListening={setIsListening}
-          />
-        </div>
-
-        {/* Congratulations Modal */}
-        <Modal
-          isOpen={showModal}
-          onClose={() => setShowModal(false)}
-          title="🎉 Congratulations!"
-          subtitle="You answered correctly!"
+    <main className="min-h-screen flex flex-col items-center justify-center p-4">
+      {/* AI Avatar Sphere */}
+      <div className="flex-1 flex items-center justify-center">
+        <Sphere 
+          isIdle={!isListening && !isSpeaking}
+          isSpeaking={isSpeaking}
+          amplitude={audioAmplitude}
         />
-      </main>
-    </WagmiProvider>
+      </div>
+
+      {/* Response Text Display */}
+      {currentResponse && (
+        <div className="w-full max-w-2xl mx-4 mb-8">
+          <div className="bg-black/20 backdrop-blur-sm rounded-lg p-4 border border-white/10">
+            <p className="text-center text-lg leading-relaxed">
+              {currentResponse}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Voice Input Button */}
+      <div className="mb-8">
+        <VoiceButton
+          onVoiceInput={handleVoiceInput}
+          isListening={isListening}
+          setIsListening={setIsListening}
+        />
+      </div>
+    </main>
   );
 } 
