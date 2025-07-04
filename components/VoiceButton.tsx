@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic, MicOff, Play, Square } from 'lucide-react';
+import { useState as useLocalState } from 'react';
 
 interface VoiceButtonProps {
   onVoiceInput: (transcript: string, audioBlob?: Blob) => void;
@@ -24,6 +25,7 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
   const audioUrlRef = useRef<string | null>(null);
   const isHoldingRef = useRef(false);
   const finalTranscriptRef = useRef('');
+  const [isLoading, setIsLoading] = useLocalState(false);
 
   // Initialize speech recognition and audio recording
   useEffect(() => {
@@ -166,31 +168,28 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
   }, [hasRecording]);
 
   const startListening = useCallback(() => {
-    console.log('Starting to listen...');
-    isHoldingRef.current = true;
-    setIsHolding(true);
-    
-    // Clear previous transcript
-    setTranscript('');
-    finalTranscriptRef.current = '';
-    
-    if (recognitionRef.current && isSupported) {
-      try {
-        // Start speech recognition
-        recognitionRef.current.start();
-        // Start audio recording
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      isHoldingRef.current = true;
+      setIsHolding(true);
+      // Clear previous transcript
+      setTranscript('');
+      finalTranscriptRef.current = '';
+      if (recognitionRef.current && isSupported) {
+        try {
+          recognitionRef.current.start();
+          startAudioRecording();
+        } catch (error) {
+          console.error('Error starting speech recognition:', error);
+          setIsListening(false);
+          isHoldingRef.current = false;
+          setIsHolding(false);
+        }
+      } else if (!isSupported) {
         startAudioRecording();
-      } catch (error) {
-        console.error('Error starting speech recognition:', error);
-        setIsListening(false);
-        isHoldingRef.current = false;
-        setIsHolding(false);
       }
-    } else if (!isSupported) {
-      console.log('Speech recognition not supported');
-      // Still try to record audio even without speech recognition
-      startAudioRecording();
-    }
+    }, 500);
   }, [isSupported, setIsListening, startAudioRecording, setIsHolding]);
 
   const stopListening = useCallback(() => {
@@ -246,20 +245,12 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
 
   // Fallback for unsupported browsers or testing
   const handleClick = () => {
-    console.log('Button clicked, isSupported:', isSupported, 'isHolding:', isHolding);
-    
-    if (!isSupported) {
-      // For testing purposes, simulate a voice input
-      const testTranscript = 'Hello, this is a test message';
-      console.log('Simulating voice input:', testTranscript);
-      onVoiceInput(testTranscript, audioBlobRef.current || undefined);
-      return;
-    }
-    
-    if (isHolding) {
-      stopListening();
-    } else {
-      startListening();
+    if (isSupported) {
+      if (isHolding) {
+        stopListening();
+      } else {
+        startListening();
+      }
     }
   };
 
@@ -284,8 +275,16 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           onClick={handleClick}
+          disabled={isLoading}
         >
-          {isListening || isRecording ? (
+          {isLoading ? (
+            <span className="w-8 h-8 mx-auto flex items-center justify-center">
+              <svg className="animate-spin h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+              </svg>
+            </span>
+          ) : isListening || isRecording ? (
             <MicOff className="w-8 h-8 mx-auto" />
           ) : (
             <Mic className="w-8 h-8 mx-auto" />
@@ -328,14 +327,14 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
       </div>
       
       <div className="text-center">
-        <p className="text-lg font-medium">
-          {isListening ? '🎙️ Listening...' : isRecording ? '🎙️ Recording...' : isHolding ? '🎙️ Holding...' : '🎙️ Hold to Talk'}
+        <p className="text-lg font-medium min-h-[1.5em] flex items-center justify-center">
+          {isLoading ? (
+            <svg className="animate-spin h-6 w-6 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+          ) : isListening ? '🎙️ Listening...' : isRecording ? '🎙️ Recording...' : isHolding ? '🎙️ Holding...' : '🎙️ Hold to Talk'}
         </p>
-        {!isSupported && (
-          <p className="text-sm text-yellow-400 mt-1">
-            Click to test (simulated input)
-          </p>
-        )}
         {hasRecording && (
           <p className="text-sm text-green-400 mt-1">
             {isPlaying ? 'Playing recording...' : 'Click play to hear your recording'}
