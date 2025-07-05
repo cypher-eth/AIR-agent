@@ -11,15 +11,13 @@ interface ResponseModalProps {
   onClose: () => void;
   responseText: string;
   isSpeaking: boolean;
-  onToggleSpeech: () => void;
 }
 
 export function ResponseModal({ 
   isOpen, 
   onClose, 
   responseText, 
-  isSpeaking, 
-  onToggleSpeech 
+  isSpeaking
 }: ResponseModalProps) {
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -88,21 +86,6 @@ export function ResponseModal({
             </h2>
           </div>
           <div className="flex items-center space-x-3">
-            {/* Speech Toggle */}
-            <button
-              onClick={onToggleSpeech}
-              className={`
-                p-2 rounded-lg transition-all duration-200
-                ${isSpeaking 
-                  ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' 
-                  : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                }
-              `}
-              title={isSpeaking ? 'Stop speaking' : 'Start speaking'}
-            >
-              {isSpeaking ? <VolumeX size={20} /> : <Volume2 size={20} />}
-            </button>
-            
             {/* Close Button */}
             <button
               onClick={onClose}

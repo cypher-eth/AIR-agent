@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { playTextToSpeech, stopTextToSpeech } from '@/lib/audio';
 import { ResponseModal } from '@/components/ResponseModal';
 import { ResponseBox } from '@/components/ResponseBox';
 import { LoginModal, usePrivy } from '@privy-io/react-auth';
@@ -99,6 +98,9 @@ export default function Home() {
   const [status, setStatus] = useState<string>('Ready');
   const [showModal, setShowModal] = useState(false);
   
+  // Audio state management
+  const [isAIAudioPlaying, setIsAIAudioPlaying] = useState(false);
+  
   // Auth state
   const { user, login, authenticated, ready } = usePrivy();
   const { address } = useAccount();
@@ -114,7 +116,7 @@ export default function Home() {
       currentAudioRef.current.currentTime = 0;
       currentAudioRef.current = null;
     }
-    stopTextToSpeech();
+    setIsAIAudioPlaying(false);
   }, []);
 
   // Unified function to process audio/transcript with AI
@@ -192,11 +194,7 @@ export default function Home() {
           });
           console.log('Base64 audio played successfully');
         } catch (error) {
-          console.error('Failed to play base64 audio, falling back to TTS:', error);
-          // Fall back to text-to-speech if base64 audio fails
-          await playTextToSpeech(aiResponse.responseText, (amplitude) => {
-            setAudioAmplitude(amplitude);
-          });
+          console.error('Failed to play base64 audio:', error);
         } finally {
           setAppState('idle');
           setAudioAmplitude(0);
@@ -234,16 +232,13 @@ export default function Home() {
         };
 
         await audio.play();
-      } else {
-        // Use Web Speech API for text-to-speech
-        console.log('No valid audio found, using text-to-speech...');
-        await playTextToSpeech(aiResponse.responseText, (amplitude) => {
-          setAudioAmplitude(amplitude);
-        });
-        setAppState('idle');
-        setAudioAmplitude(0);
-        setStatus('Ready');
-      }
+              } else {
+          // No audio available
+          console.log('No valid audio found');
+          setAppState('idle');
+          setAudioAmplitude(0);
+          setStatus('Ready');
+        }
 
       // Show congratulations message if answer is correct
       if (aiResponse.responseType === 'correct') {
@@ -258,8 +253,7 @@ export default function Home() {
       setAppState('error');
       setStatus('Error occurred');
       
-      // Play error message
-      await playTextToSpeech(errorMessage);
+      // Show error message
       setAppState('idle');
       setStatus('Ready');
     } finally {
@@ -358,8 +352,8 @@ export default function Home() {
 
   // Toggle AI audio playback
   const toggleAudio = useCallback(() => {
-    if (appState === 'speaking') {
-      // Stop audio
+    if (isAIAudioPlaying) {
+      // Stop AI audio
       stopCurrentAudio();
       setAppState('idle');
       setAudioAmplitude(0);
@@ -368,6 +362,7 @@ export default function Home() {
       // Start AI audio
       const audioData = aiDebug?.responseAudioBase64 || aiDebug?.responseAudio;
       if (audioData && typeof audioData === 'string' && audioData.length > 100 && appState === 'idle') {
+        setIsAIAudioPlaying(true);
         setAppState('speaking');
         setStatus('Playing AI audio...');
         
@@ -379,39 +374,20 @@ export default function Home() {
           setAudioAmplitude(0);
           setStatus('Ready');
           currentAudioRef.current = null;
+          setIsAIAudioPlaying(false);
         }).catch((error) => {
           console.error('Failed to play AI audio:', error);
           setAppState('idle');
           setAudioAmplitude(0);
           setStatus('Ready');
           currentAudioRef.current = null;
+          setIsAIAudioPlaying(false);
         });
       }
     }
-  }, [appState, aiDebug, stopCurrentAudio]);
+  }, [appState, aiDebug, stopCurrentAudio, isAIAudioPlaying]);
 
-  // Toggle text-to-speech playback
-  const toggleSpeech = useCallback(() => {
-    if (appState === 'speaking') {
-      // Stop speaking
-      stopCurrentAudio();
-      setAppState('idle');
-      setAudioAmplitude(0);
-      setStatus('Ready');
-    } else {
-      // Start speaking
-      if (currentResponse && appState === 'idle') {
-        setAppState('speaking');
-        playTextToSpeech(currentResponse, (amplitude) => {
-          setAudioAmplitude(amplitude);
-        }).then(() => {
-          setAppState('idle');
-          setAudioAmplitude(0);
-          setStatus('Ready');
-        });
-      }
-    }
-  }, [appState, currentResponse, stopCurrentAudio]);
+
 
   // Modal close handler that also stops speech
   const handleCloseModal = useCallback(() => {
@@ -447,7 +423,7 @@ export default function Home() {
 
   // Determine if Sphere should be disabled
   const isSphereDisabled = appState === 'processing' || appState === 'speaking';
-  const isSpeaking = appState === 'speaking';
+  const isSpeaking = isAIAudioPlaying;
   const hasAudioResponse = !!(aiDebug?.responseAudioBase64 || aiDebug?.responseAudio || aiDebug?.responseAudioUrl);
 
   return (
@@ -470,11 +446,11 @@ export default function Home() {
           <ResponseBox
             responseText={currentResponse}
             isSpeaking={isSpeaking}
-            onToggleSpeech={toggleSpeech}
             onClick={() => setShowModal(true)}
             disabled={appState === 'processing'}
             hasAudioResponse={hasAudioResponse}
             onToggleAudio={toggleAudio}
+            isAIAudioPlaying={isAIAudioPlaying}
           />
         </div>
 
@@ -484,7 +460,6 @@ export default function Home() {
           onClose={handleCloseModal}
           responseText={currentResponse}
           isSpeaking={isSpeaking}
-          onToggleSpeech={toggleSpeech}
         />
       </main>
     </>
