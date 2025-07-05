@@ -7,6 +7,7 @@ import * as THREE from 'three';
 interface SphereProps {
   amplitude: number;
   onVoiceInput: (transcript: string, audioBlob?: Blob) => void;
+  small?: boolean;
 }
 
 function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: { isIdle: boolean; isSpeaking: boolean; isListening: boolean; amplitude: number; }) {
@@ -65,7 +66,7 @@ function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: { isIdle
   );
 }
 
-export function Sphere({ amplitude, onVoiceInput }: SphereProps) {
+export function Sphere({ amplitude, onVoiceInput, small }: SphereProps) {
   const [isIdle, setIsIdle] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -243,19 +244,19 @@ export function Sphere({ amplitude, onVoiceInput }: SphereProps) {
   };
 
   return (
-    <div className="w-80 h-80 relative select-none"
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      >
-      <Canvas
-        camera={{ position: [0, 0, 3], fov: 50 }}
-        style={{ background: 'transparent' }}
-      >
-        <ambientLight intensity={1} />
-        <pointLight position={[10, 10, 10]} intensity={1} />
-        <pointLight position={[-10, -10, -10]} intensity={0.5} color="#f9a8d4" />
+    <div
+      className={small ? 'relative flex items-center justify-center select-none w-full h-full' : 'relative flex items-center justify-center select-none'}
+      style={small ? {} : { width: 240, height: 240 }}
+      {...(!small && {
+        onPointerDown: handlePointerDown,
+        onPointerUp: handlePointerUp,
+        onPointerLeave: handlePointerUp,
+        onPointerCancel: handlePointerUp,
+      })}
+    >
+      <Canvas camera={{ position: [0, 0, 3] }} shadows style={small ? { width: '100%', height: '100%' } : {}}>
+        <ambientLight intensity={0.7} />
+        <directionalLight position={[5, 5, 5]} intensity={0.7} />
         <AnimatedSphere isIdle={isIdle} isSpeaking={isSpeaking} isListening={isListening} amplitude={amplitude} />
       </Canvas>
       {/* Glow effect */}

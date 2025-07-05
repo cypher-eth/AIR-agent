@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { X, Volume2, VolumeX } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const Sphere = dynamic(() => import('./Sphere').then(mod => mod.Sphere), { ssr: false });
 
 interface ResponseModalProps {
   isOpen: boolean;
@@ -70,9 +73,15 @@ export function ResponseModal({
       <div className="bg-gray-900/95 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h2 className="text-xl font-semibold text-white">
-            AI Response
-          </h2>
+          <div className="flex items-center space-x-3">
+            {/* Small Sphere */}
+            <div className="w-8 h-8 flex items-center justify-center">
+              <Sphere amplitude={0.5} onVoiceInput={() => {}} small={true} />
+            </div>
+            <h2 className="text-xl font-semibold text-white">
+              Air Agent
+            </h2>
+          </div>
           <div className="flex items-center space-x-3">
             {/* Speech Toggle */}
             <button
@@ -138,6 +147,19 @@ export function ResponseModal({
               />
               <span>Auto-scroll</span>
             </label>
+            {/* Skip Button */}
+            {isSpeaking && currentIndex < responseText.length && (
+              <button
+                className="ml-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all duration-200"
+                onClick={() => {
+                  setDisplayedText(responseText);
+                  setCurrentIndex(responseText.length);
+                }}
+                title="Skip to end"
+              >
+                Skip
+              </button>
+            )}
           </div>
         </div>
       </div>

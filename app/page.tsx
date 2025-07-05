@@ -4,6 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { playTextToSpeech } from '@/lib/audio';
 import { Play, Square, Send } from 'lucide-react';
+import { ResponseModal } from '@/components/ResponseModal';
 
 export type ResponseType = 'info' | 'quiz' | 'correct';
 
@@ -28,6 +29,7 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState<string>('Ready');
+  const [showModal, setShowModal] = useState(false);
 
   // Unified function to process audio/transcript with AI
   const processWithAI = async (transcript: string, audioBlob?: Blob) => {
@@ -67,6 +69,9 @@ export default function Home() {
       setCurrentResponse(aiResponse.responseText);
       setAiDebug(aiResponse);
       setStatus('Playing AI response...');
+
+      // Show modal with response
+      setShowModal(true);
 
       // Play audio response if available
       if (aiResponse.responseAudioUrl) {
@@ -110,6 +115,9 @@ export default function Home() {
       const errorMessage = 'Sorry, I encountered an error processing your request. Please try again.';
       setCurrentResponse(errorMessage);
       setStatus('Error occurred');
+      
+      // Show modal with error
+      setShowModal(true);
       
       // Play error message
       setIsSpeaking(true);
@@ -156,6 +164,7 @@ export default function Home() {
       console.error('Error sending audio to AI:', error);
       setCurrentResponse('Sorry, I encountered an error processing your audio. Please try again.');
       setStatus('Error occurred');
+      setShowModal(true);
     }
   };
 
@@ -192,16 +201,39 @@ export default function Home() {
       if (result.success) {
         setCurrentResponse(`N8N Test Successful! Response keys: ${result.responseKeys.join(', ')}`);
         setAiDebug(result);
+        setShowModal(true);
       } else {
         setCurrentResponse(`N8N Test Failed: ${result.error}`);
         setAiDebug(result);
+        setShowModal(true);
       }
     } catch (error) {
       console.error('Error testing n8n:', error);
       setCurrentResponse('Error testing n8n workflow');
+      setShowModal(true);
     } finally {
       setIsProcessing(false);
       setStatus('Ready');
+    }
+  };
+
+  // Toggle speech playback
+  const toggleSpeech = () => {
+    if (isSpeaking) {
+      // Stop speaking
+      setIsSpeaking(false);
+      setAudioAmplitude(0);
+    } else {
+      // Start speaking
+      if (currentResponse) {
+        setIsSpeaking(true);
+        playTextToSpeech(currentResponse, (amplitude) => {
+          setAudioAmplitude(amplitude);
+        }).then(() => {
+          setIsSpeaking(false);
+          setAudioAmplitude(0);
+        });
+      }
     }
   };
 
@@ -223,25 +255,6 @@ export default function Home() {
           onVoiceInput={handleVoiceInput}
         />
       </div>
-
-      {/* Response Text Display */}
-      {currentResponse && (
-        <div className="w-full max-w-2xl mx-4 mb-8">
-          <div className="bg-black/20 backdrop-blur-sm rounded-lg p-4 border border-white/10">
-            <p className="text-center text-lg leading-relaxed">
-              {currentResponse}
-            </p>
-            {aiDebug && (
-              <details className="mt-4">
-                <summary className="text-xs text-gray-400 cursor-pointer">Debug Info</summary>
-                <pre className="mt-2 text-xs text-left text-gray-400 whitespace-pre-wrap break-all">
-                  {JSON.stringify(aiDebug, null, 2)}
-                </pre>
-              </details>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Control Buttons */}
       <div className="flex items-center space-x-4 mb-8">
@@ -300,33 +313,16 @@ export default function Home() {
             <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-20" />
           )}
         </button>
-
-        {/* Test N8N Button */}
-        <button
-          className={`
-            relative w-20 h-20 rounded-full font-medium text-white
-            transition-all duration-200 transform
-            ${isProcessing
-              ? 'bg-yellow-500 scale-110 shadow-lg shadow-yellow-500/50' 
-              : 'bg-yellow-600 hover:bg-yellow-700 shadow-lg shadow-yellow-600/50'
-            }
-            cursor-pointer
-            active:scale-95
-          `}
-          onClick={testN8nWorkflow}
-          disabled={isProcessing}
-          title="Test n8n workflow"
-        >
-          {isProcessing ? (
-            <div className="w-8 h-8 mx-auto border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <div className="w-8 h-8 mx-auto text-center text-sm font-bold">T</div>
-          )}
-          {isProcessing && (
-            <div className="absolute inset-0 rounded-full bg-yellow-500 animate-ping opacity-20" />
-          )}
-        </button>
       </div>
+
+      {/* Response Modal */}
+      <ResponseModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        responseText={currentResponse}
+        isSpeaking={isSpeaking}
+        onToggleSpeech={toggleSpeech}
+      />
     </main>
   );
 } 
