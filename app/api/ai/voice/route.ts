@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
         status: n8nResponse.status,
         statusText: n8nResponse.statusText,
       });
+      
       // Try to get error details from response
       try {
         const errorText = await n8nResponse.text();
@@ -61,11 +62,9 @@ export async function POST(request: NextRequest) {
       } catch (e) {
         console.error('Could not read error response body');
       }
-      // Return error if n8n fails
-      return NextResponse.json(
-        { error: 'Failed to get a response from n8n workflow.' },
-        { status: 502 }
-      );
+      
+      // Fallback to local processing if n8n fails
+      return handleLocalProcessing(transcript || '');
     }
 
     let n8nResult;
@@ -76,6 +75,7 @@ export async function POST(request: NextRequest) {
       // Try to get the raw response
       const rawResponse = await n8nResponse.text();
       console.error('Raw n8n response:', rawResponse);
+      
       // If it's a string, use it directly
       if (typeof rawResponse === 'string' && rawResponse.trim()) {
         return NextResponse.json({
@@ -90,11 +90,9 @@ export async function POST(request: NextRequest) {
           },
         });
       }
-      // Return error if n8n response is not usable
-      return NextResponse.json(
-        { error: 'Invalid response from n8n workflow.' },
-        { status: 502 }
-      );
+      
+      // Fallback to local processing
+      return handleLocalProcessing(transcript || '');
     }
 
     console.log('N8N workflow response received:', {
@@ -138,53 +136,14 @@ export async function POST(request: NextRequest) {
       console.log('Using string response:', responseText);
     } else {
       console.log('No response text found in any expected field');
-      // Return error if no usable response
-      return NextResponse.json(
-        { error: 'No usable response text received from n8n.' },
-        { status: 502 }
-      );
+      responseText = 'No response text received from AI';
     }
-
-    // Extract audio data from n8n response
-    let responseAudioBase64 = null;
-    
-    // Check for base64 audio data directly in the response
-    if (n8nResult.responseAudio && typeof n8nResult.responseAudio === 'string') {
-      responseAudioBase64 = n8nResult.responseAudio;
-      console.log('Found responseAudio base64 data, length:', responseAudioBase64.length);
-    } else if (n8nResult.responseAudioBase64 && typeof n8nResult.responseAudioBase64 === 'string') {
-      responseAudioBase64 = n8nResult.responseAudioBase64;
-      console.log('Found responseAudioBase64 data, length:', responseAudioBase64.length);
-    } else {
-      // Fallback: try to fetch audio file from URL if present
-      let audioUrl = n8nResult.responseAudioUrl || n8nResult.audioFileUrl || n8nResult.audioUrl || null;
-      if (audioUrl) {
-        try {
-          console.log('Fetching audio from URL:', audioUrl);
-          const audioRes = await fetch(audioUrl);
-          if (audioRes.ok) {
-            const audioBuffer = await audioRes.arrayBuffer();
-            responseAudioBase64 = Buffer.from(audioBuffer).toString('base64');
-            console.log('Fetched audio from URL, converted to base64, length:', responseAudioBase64.length);
-          } else {
-            console.error('Failed to fetch audio file from n8n:', audioRes.status, audioRes.statusText);
-          }
-        } catch (err) {
-          console.error('Error fetching audio file from n8n:', err);
-        }
-      }
-    }
-    
-    console.log('Final audio data status:', {
-      hasResponseAudioBase64: !!responseAudioBase64,
-      responseAudioBase64Length: responseAudioBase64?.length || 0
-    });
 
     // Return the n8n workflow response
     return NextResponse.json({
       responseText,
       responseType: n8nResult.responseType || 'info',
-      responseAudioBase64,
+      responseAudioUrl: n8nResult.responseAudioUrl || null,
       metadata: {
         ...n8nResult.metadata,
         source: 'n8n-workflow',
@@ -196,15 +155,63 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error processing voice input:', error);
-    // Return error if n8n is unavailable
-    return NextResponse.json(
-      { 
-        error: 'Internal server error',
-        responseText: 'Sorry, I encountered an error processing your request. Please try again.',
-        responseType: 'info',
-        metadata: { source: 'error-fallback' }
-      },
-      { status: 500 }
-    );
+    
+    // Fallback to local processing if n8n is unavailable
+    try {
+      const { transcript } = await request.json();
+      return handleLocalProcessing(transcript || '');
+    } catch (fallbackError) {
+      console.error('Fallback processing also failed:', fallbackError);
+      return NextResponse.json(
+        { 
+          error: 'Internal server error',
+          responseText: 'Sorry, I encountered an error processing your request. Please try again.',
+          responseType: 'info',
+          metadata: { source: 'error-fallback' }
+        },
+        { status: 500 }
+      );
+    }
   }
+}
+
+// Fallback local processing function
+function handleLocalProcessing(transcript: string) {
+  const processedTranscript = transcript.toLowerCase().trim();
+  
+  let responseText = '';
+  let responseType: 'info' | 'quiz' | 'correct' = 'info';
+
+  // Simple quiz logic - check for common capital city answers
+  if (processedTranscript.includes('paris') && processedTranscript.includes('france')) {
+    responseText = 'Correct! Paris is indeed the capital of France. Well done!';
+    responseType = 'correct';
+  } else if (processedTranscript.includes('london') && processedTranscript.includes('england')) {
+    responseText = 'Correct! London is the capital of England. Excellent!';
+    responseType = 'correct';
+  } else if (processedTranscript.includes('tokyo') && processedTranscript.includes('japan')) {
+    responseText = 'Correct! Tokyo is the capital of Japan. Great job!';
+    responseType = 'correct';
+  } else if (processedTranscript.includes('capital')) {
+    responseText = 'Let me ask you a geography question: What is the capital of France?';
+    responseType = 'quiz';
+  } else if (processedTranscript.includes('hello') || processedTranscript.includes('hi')) {
+    responseText = 'Hello! I\'m your AI assistant. I can help you with various questions. Try asking me about capital cities!';
+    responseType = 'info';
+  } else if (processedTranscript.includes('help')) {
+    responseText = 'I can help you learn about geography, answer questions, and test your knowledge. Ask me about capital cities to get started!';
+    responseType = 'info';
+  } else {
+    responseText = 'That\'s interesting! Let me ask you a question: What is the capital of France?';
+    responseType = 'quiz';
+  }
+
+  return NextResponse.json({
+    responseText,
+    responseType,
+    metadata: { 
+      source: 'local-fallback',
+      processedAt: new Date().toISOString()
+    },
+  });
 } 
