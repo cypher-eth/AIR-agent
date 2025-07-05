@@ -11,6 +11,7 @@ export interface AIResponse {
   responseText: string;
   responseAudioUrl?: string;
   responseType: ResponseType;
+  metadata?: any;
 }
 
 // Dynamically import Sphere with SSR disabled
@@ -25,117 +26,15 @@ export default function Home() {
   const [audioAmplitude, setAudioAmplitude] = useState(0);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isSendingToAI, setIsSendingToAI] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState<string>('Ready');
 
-  const sendAudioToAI = async () => {
-    if (!recordingUrl) return;
+  // Unified function to process audio/transcript with AI
+  const processWithAI = async (transcript: string, audioBlob?: Blob) => {
+    setIsProcessing(true);
+    setStatus('Processing with AI...');
     
-    setIsSendingToAI(true);
-    setStatus('Sending audio to AI...');
     try {
-      // Convert the blob URL back to a blob
-      const response = await fetch(recordingUrl);
-      const audioBlob = await response.blob();
-      
-      // Convert to base64
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
-      const audioBlobBase64 = btoa(binaryString);
-      
-      console.log('Sending audio to n8n workflow...');
-      setStatus('Processing with AI...');
-      
-      const aiResponse = await fetch('/api/ai/voice', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          transcript: '', // Empty transcript since we're sending audio only
-          audioBlob: audioBlobBase64 
-        }),
-      });
-
-      if (!aiResponse.ok) {
-        throw new Error('Failed to get AI response');
-      }
-
-      const result: AIResponse = await aiResponse.json();
-      console.log('AI Response:', result);
-      setCurrentResponse(result.responseText);
-      setAiDebug(result);
-      setStatus('Playing AI response..');
-
-      // Play audio response
-      if (result.responseAudioUrl) {
-        const audio = new Audio(result.responseAudioUrl);
-        setIsSpeaking(true);
-        
-        const analyseAudio = () => {
-          setAudioAmplitude(Math.random() * 0.5 + 0.3);
-        };
-        
-        const intervalId = setInterval(analyseAudio, 100);
-        
-        audio.onended = () => {
-          setIsSpeaking(false);
-          setAudioAmplitude(0);
-          clearInterval(intervalId);
-          setStatus('Ready');
-        };
-        
-        await audio.play();
-      } else {
-        setIsSpeaking(true);
-        await playTextToSpeech(result.responseText, (amplitude) => {
-          setAudioAmplitude(amplitude);
-        });
-        setIsSpeaking(false);
-        setAudioAmplitude(0);
-        setStatus('Ready');
-      }
-
-      if (result.responseType === 'correct') {
-        alert('🎉 Congratulations! You answered correctly!');
-      }
-    } catch (error) {
-      console.error('Error sending audio to AI:', error);
-      setCurrentResponse('Sorry, I encountered an error processing your audio. Please try again.');
-      setStatus('Error occurred');
-    } finally {
-      setIsSendingToAI(false);
-    }
-  };
-
-  const handleVoiceInput = async (transcript: string, audioBlob?: Blob) => {
-    console.log('Received voice input:', transcript);
-    console.log('Audio blob received:', audioBlob ? `Size: ${audioBlob.size}, Type: ${audioBlob.type}` : 'No audio blob');
-    setStatus('Processing voice input...');
-    
-    // If audioBlob is present, create a URL for playback
-    if (audioBlob) {
-      console.log('Creating recording URL from audio blob...');
-      if (recordingUrl) {
-        URL.revokeObjectURL(recordingUrl);
-      }
-      const newRecordingUrl = URL.createObjectURL(audioBlob);
-      console.log('New recording URL created:', newRecordingUrl);
-      setRecordingUrl(newRecordingUrl);
-    }
-
-    // Only proceed with AI processing if there's a transcript
-    if (!transcript.trim()) {
-      console.log('Empty transcript, skipping AI processing');
-      setStatus('Ready');
-      return;
-    }
-
-    try {
-      console.log('Sending to API...');
-      setStatus('Sending to AI...');
-      
       // Convert audio blob to base64 if available
       let audioBlobBase64 = null;
       if (audioBlob) {
@@ -158,24 +57,24 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get AI response');
+        throw new Error(`Failed to get AI response: ${response.status}`);
       }
 
       const aiResponse: AIResponse = await response.json();
       console.log('AI Response:', aiResponse);
+      
+      // Always display the response text
       setCurrentResponse(aiResponse.responseText);
       setAiDebug(aiResponse);
       setStatus('Playing AI response...');
 
-      // Play audio response
+      // Play audio response if available
       if (aiResponse.responseAudioUrl) {
-        // If audio URL is provided, play it
         const audio = new Audio(aiResponse.responseAudioUrl);
         setIsSpeaking(true);
         
-        // Monitor audio for amplitude (simplified)
         const analyseAudio = () => {
-          setAudioAmplitude(Math.random() * 0.5 + 0.3); // Simulate amplitude
+          setAudioAmplitude(Math.random() * 0.5 + 0.3);
         };
         
         const intervalId = setInterval(analyseAudio, 100);
@@ -202,17 +101,107 @@ export default function Home() {
 
       // Show congratulations message if answer is correct
       if (aiResponse.responseType === 'correct') {
-        alert('🎉 Congratulations! You answered correctly!');
+        setTimeout(() => {
+          alert('🎉 Congratulations! You answered correctly!');
+        }, 1000);
       }
     } catch (error) {
-      console.error('Error processing voice input:', error);
-      setCurrentResponse('Sorry, I encountered an error. Please try again.');
+      console.error('Error processing with AI:', error);
+      const errorMessage = 'Sorry, I encountered an error processing your request. Please try again.';
+      setCurrentResponse(errorMessage);
       setStatus('Error occurred');
       
       // Play error message
       setIsSpeaking(true);
-      await playTextToSpeech('Sorry, I encountered an error. Please try again.');
+      await playTextToSpeech(errorMessage);
       setIsSpeaking(false);
+      setStatus('Ready');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle voice input from Sphere component
+  const handleVoiceInput = async (transcript: string, audioBlob?: Blob) => {
+    console.log('Received voice input:', transcript);
+    console.log('Audio blob received:', audioBlob ? `Size: ${audioBlob.size}, Type: ${audioBlob.type}` : 'No audio blob');
+    
+    // If audioBlob is present, create a URL for playback
+    if (audioBlob) {
+      console.log('Creating recording URL from audio blob...');
+      if (recordingUrl) {
+        URL.revokeObjectURL(recordingUrl);
+      }
+      const newRecordingUrl = URL.createObjectURL(audioBlob);
+      console.log('New recording URL created:', newRecordingUrl);
+      setRecordingUrl(newRecordingUrl);
+    }
+
+    // Process with AI (even if transcript is empty, n8n can process audio)
+    await processWithAI(transcript, audioBlob);
+  };
+
+  // Handle sending audio-only to AI (for the Send button)
+  const sendAudioToAI = async () => {
+    if (!recordingUrl) return;
+    
+    try {
+      // Convert the blob URL back to a blob
+      const response = await fetch(recordingUrl);
+      const audioBlob = await response.blob();
+      
+      // Process with AI using only audio (no transcript)
+      await processWithAI('', audioBlob);
+    } catch (error) {
+      console.error('Error sending audio to AI:', error);
+      setCurrentResponse('Sorry, I encountered an error processing your audio. Please try again.');
+      setStatus('Error occurred');
+    }
+  };
+
+  // Play the last recording
+  const playRecording = async () => {
+    if (recordingUrl && !isPlaying) {
+      const audio = new Audio(recordingUrl);
+      setIsPlaying(true);
+      audio.onended = () => setIsPlaying(false);
+      audio.onerror = () => setIsPlaying(false);
+      await audio.play().catch(() => setIsPlaying(false));
+    }
+  };
+
+  // Test n8n workflow
+  const testN8nWorkflow = async () => {
+    setIsProcessing(true);
+    setStatus('Testing n8n workflow...');
+    
+    try {
+      const response = await fetch('/api/test-n8n', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          testData: 'Hello, this is a test message from the web app'
+        }),
+      });
+
+      const result = await response.json();
+      console.log('N8N test result:', result);
+      
+      if (result.success) {
+        setCurrentResponse(`N8N Test Successful! Response keys: ${result.responseKeys.join(', ')}`);
+        setAiDebug(result);
+      } else {
+        setCurrentResponse(`N8N Test Failed: ${result.error}`);
+        setAiDebug(result);
+      }
+    } catch (error) {
+      console.error('Error testing n8n:', error);
+      setCurrentResponse('Error testing n8n workflow');
+    } finally {
+      setIsProcessing(false);
+      setStatus('Ready');
     }
   };
 
@@ -243,79 +232,101 @@ export default function Home() {
               {currentResponse}
             </p>
             {aiDebug && (
-              <pre className="mt-4 text-xs text-left text-gray-400 whitespace-pre-wrap break-all">
-                {JSON.stringify(aiDebug, null, 2)}
-              </pre>
+              <details className="mt-4">
+                <summary className="text-xs text-gray-400 cursor-pointer">Debug Info</summary>
+                <pre className="mt-2 text-xs text-left text-gray-400 whitespace-pre-wrap break-all">
+                  {JSON.stringify(aiDebug, null, 2)}
+                </pre>
+              </details>
             )}
           </div>
         </div>
       )}
 
-      {/* Play Button for last recording */}
-      <button
-        className={`
-          relative w-20 h-20 rounded-full font-medium text-white
-          transition-all duration-200 transform
-          ${!recordingUrl
-            ? 'bg-gray-400 cursor-not-allowed shadow-lg shadow-gray-400/50'
-            : isPlaying
-              ? 'bg-green-500 hover:bg-green-600 scale-110 shadow-lg shadow-green-500/50' 
-              : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/50'
-          }
-          cursor-pointer
-          active:scale-95
-          mb-8
-        `}
-        onClick={async () => {
-          if (recordingUrl && !isPlaying) {
-            const audio = new Audio(recordingUrl);
-            setIsPlaying(true);
-            audio.onended = () => setIsPlaying(false);
-            audio.onerror = () => setIsPlaying(false);
-            await audio.play().catch(() => setIsPlaying(false));
-          }
-        }}
-        disabled={isPlaying || !recordingUrl}
-      >
-        {isPlaying ? (
-          <Square className="w-8 h-8 mx-auto" />
-        ) : (
-          <Play className="w-8 h-8 mx-auto" />
-        )}
-        {(isPlaying || !recordingUrl) && (
-          <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-20" />
-        )}
-      </button>
+      {/* Control Buttons */}
+      <div className="flex items-center space-x-4 mb-8">
+        {/* Play Recording Button */}
+        <button
+          className={`
+            relative w-20 h-20 rounded-full font-medium text-white
+            transition-all duration-200 transform
+            ${!recordingUrl
+              ? 'bg-gray-400 cursor-not-allowed shadow-lg shadow-gray-400/50'
+              : isPlaying
+                ? 'bg-green-500 hover:bg-green-600 scale-110 shadow-lg shadow-green-500/50' 
+                : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/50'
+            }
+            cursor-pointer
+            active:scale-95
+          `}
+          onClick={playRecording}
+          disabled={isPlaying || !recordingUrl}
+          title="Play last recording"
+        >
+          {isPlaying ? (
+            <Square className="w-8 h-8 mx-auto" />
+          ) : (
+            <Play className="w-8 h-8 mx-auto" />
+          )}
+          {(isPlaying || !recordingUrl) && (
+            <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-20" />
+          )}
+        </button>
 
-      {/* Send to AI Button */}
-      <button
-        className={`
-          relative w-20 h-20 rounded-full font-medium text-white ml-4
-          transition-all duration-200 transform
-          ${!recordingUrl
-            ? 'bg-gray-400 cursor-not-allowed shadow-lg shadow-gray-400/50'
-            : isSendingToAI
-              ? 'bg-blue-500 scale-110 shadow-lg shadow-blue-500/50' 
-              : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/50'
-          }
-          cursor-pointer
-          active:scale-95
-          mb-8
-        `}
-        onClick={sendAudioToAI}
-        disabled={isSendingToAI || !recordingUrl}
-      >
-        {isSendingToAI ? (
-          <div className="w-8 h-8 mx-auto border-2 border-white border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <Send className="w-8 h-8 mx-auto" />
-        )}
-        {(isSendingToAI || !recordingUrl) && (
-          <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-20" />
-        )}
-      </button>
+        {/* Send to AI Button */}
+        <button
+          className={`
+            relative w-20 h-20 rounded-full font-medium text-white
+            transition-all duration-200 transform
+            ${!recordingUrl
+              ? 'bg-gray-400 cursor-not-allowed shadow-lg shadow-gray-400/50'
+              : isProcessing
+                ? 'bg-blue-500 scale-110 shadow-lg shadow-blue-500/50' 
+                : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/50'
+            }
+            cursor-pointer
+            active:scale-95
+          `}
+          onClick={sendAudioToAI}
+          disabled={isProcessing || !recordingUrl}
+          title="Send audio to AI"
+        >
+          {isProcessing ? (
+            <div className="w-8 h-8 mx-auto border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Send className="w-8 h-8 mx-auto" />
+          )}
+          {(isProcessing || !recordingUrl) && (
+            <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-20" />
+          )}
+        </button>
 
-      {/* Play button and other controls will be added here after moving record logic to Sphere */}
+        {/* Test N8N Button */}
+        <button
+          className={`
+            relative w-20 h-20 rounded-full font-medium text-white
+            transition-all duration-200 transform
+            ${isProcessing
+              ? 'bg-yellow-500 scale-110 shadow-lg shadow-yellow-500/50' 
+              : 'bg-yellow-600 hover:bg-yellow-700 shadow-lg shadow-yellow-600/50'
+            }
+            cursor-pointer
+            active:scale-95
+          `}
+          onClick={testN8nWorkflow}
+          disabled={isProcessing}
+          title="Test n8n workflow"
+        >
+          {isProcessing ? (
+            <div className="w-8 h-8 mx-auto border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <div className="w-8 h-8 mx-auto text-center text-sm font-bold">T</div>
+          )}
+          {isProcessing && (
+            <div className="absolute inset-0 rounded-full bg-yellow-500 animate-ping opacity-20" />
+          )}
+        </button>
+      </div>
     </main>
   );
 } 

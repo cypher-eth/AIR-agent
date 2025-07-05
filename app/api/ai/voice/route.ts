@@ -4,6 +4,7 @@ export async function POST(request: NextRequest) {
   try {
     const { transcript, audioBlob } = await request.json();
 
+    // Validate input - require either transcript or audioBlob
     if ((!transcript || typeof transcript !== 'string') && !audioBlob) {
       return NextResponse.json(
         { error: 'Transcript or audioBlob is required' },
@@ -24,17 +25,18 @@ export async function POST(request: NextRequest) {
 
     // Prepare payload for n8n workflow
     const n8nPayload = {
-      transcript,
+      transcript: transcript || '', // Ensure transcript is always a string
       timestamp: new Date().toISOString(),
       sessionId: request.headers.get('x-session-id') || 'default',
       userAgent: request.headers.get('user-agent'),
-      // Include audio data if provided (base64 encoded)
-      audioData: audioBlob ? audioBlob : null,
+      audioData: audioBlob || null, // Include audio data if provided (base64 encoded)
     };
 
     console.log('Sending to n8n workflow:', {
       url: n8nWorkflowUrl,
-      payload: { ...n8nPayload, audioData: audioBlob ? '[BASE64_AUDIO_DATA]' : null }
+      hasTranscript: !!transcript,
+      hasAudioData: !!audioBlob,
+      audioDataSize: audioBlob ? audioBlob.length : 0
     });
 
     // Call n8n workflow
@@ -53,19 +55,89 @@ export async function POST(request: NextRequest) {
         statusText: n8nResponse.statusText,
       });
       
+      // Try to get error details from response
+      try {
+        const errorText = await n8nResponse.text();
+        console.error('N8N error response body:', errorText);
+      } catch (e) {
+        console.error('Could not read error response body');
+      }
+      
       // Fallback to local processing if n8n fails
-      return handleLocalProcessing(transcript);
+      return handleLocalProcessing(transcript || '');
     }
 
-    const n8nResult = await n8nResponse.json();
-    console.log('N8N workflow response:', n8nResult);
+    let n8nResult;
+    try {
+      n8nResult = await n8nResponse.json();
+    } catch (parseError) {
+      console.error('Failed to parse n8n response as JSON:', parseError);
+      // Try to get the raw response
+      const rawResponse = await n8nResponse.text();
+      console.error('Raw n8n response:', rawResponse);
+      
+      // If it's a string, use it directly
+      if (typeof rawResponse === 'string' && rawResponse.trim()) {
+        return NextResponse.json({
+          responseText: rawResponse,
+          responseType: 'info',
+          responseAudioUrl: null,
+          metadata: {
+            source: 'n8n-workflow-string-response',
+            processedAt: new Date().toISOString(),
+            hasAudioInput: !!audioBlob,
+            hasTranscriptInput: !!transcript
+          },
+        });
+      }
+      
+      // Fallback to local processing
+      return handleLocalProcessing(transcript || '');
+    }
+
+    console.log('N8N workflow response received:', {
+      hasResponseText: !!n8nResult.responseText,
+      hasMessage: !!n8nResult.message,
+      responseType: n8nResult.responseType,
+      hasAudioUrl: !!n8nResult.responseAudioUrl
+    });
+    
+    // Add detailed logging of the actual response
+    console.log('Full n8n response:', JSON.stringify(n8nResult, null, 2));
+    console.log('n8n response keys:', Object.keys(n8nResult));
+
+    // Extract response text with proper fallback logic
+    let responseText = '';
+    if (n8nResult.responseText) {
+      responseText = n8nResult.responseText;
+    } else if (n8nResult.message) {
+      responseText = n8nResult.message;
+    } else if (n8nResult.text) {
+      responseText = n8nResult.text;
+    } else if (n8nResult.content) {
+      responseText = n8nResult.content;
+    } else if (n8nResult.answer) {
+      responseText = n8nResult.answer;
+    } else if (n8nResult.response) {
+      responseText = n8nResult.response;
+    } else if (typeof n8nResult === 'string') {
+      responseText = n8nResult;
+    } else {
+      responseText = 'No response text received from AI';
+    }
 
     // Return the n8n workflow response
     return NextResponse.json({
-      responseText: n8nResult.responseText || n8nResult.message || 'No response from AI',
+      responseText,
       responseType: n8nResult.responseType || 'info',
       responseAudioUrl: n8nResult.responseAudioUrl || null,
-      metadata: n8nResult.metadata || {},
+      metadata: {
+        ...n8nResult.metadata,
+        source: 'n8n-workflow',
+        processedAt: new Date().toISOString(),
+        hasAudioInput: !!audioBlob,
+        hasTranscriptInput: !!transcript
+      },
     });
 
   } catch (error) {
@@ -74,10 +146,16 @@ export async function POST(request: NextRequest) {
     // Fallback to local processing if n8n is unavailable
     try {
       const { transcript } = await request.json();
-      return handleLocalProcessing(transcript);
+      return handleLocalProcessing(transcript || '');
     } catch (fallbackError) {
+      console.error('Fallback processing also failed:', fallbackError);
       return NextResponse.json(
-        { error: 'Internal server error' },
+        { 
+          error: 'Internal server error',
+          responseText: 'Sorry, I encountered an error processing your request. Please try again.',
+          responseType: 'info',
+          metadata: { source: 'error-fallback' }
+        },
         { status: 500 }
       );
     }
@@ -118,6 +196,9 @@ function handleLocalProcessing(transcript: string) {
   return NextResponse.json({
     responseText,
     responseType,
-    metadata: { source: 'local-fallback' },
+    metadata: { 
+      source: 'local-fallback',
+      processedAt: new Date().toISOString()
+    },
   });
 } 

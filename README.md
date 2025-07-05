@@ -12,6 +12,39 @@ An interactive AI support application featuring voice interface, 3D animated ava
 - 📱 **Mobile Responsive**: Works on desktop and mobile devices
 - 🎨 **Modern UI**: Beautiful gradient design with Tailwind CSS
 
+## 🆕 Recent Improvements
+
+### Code Cleanup & Audio Processing Enhancements
+
+The codebase has been significantly cleaned up and improved:
+
+- **Unified Audio Processing**: Consolidated duplicate audio handling code into a single `processWithAI` function
+- **Better Error Handling**: Improved error messages and fallback mechanisms
+- **Enhanced n8n Integration**: Better response text extraction with multiple fallback options
+- **Cleaner Component Structure**: Removed duplicate functionality from VoiceButton component
+- **Improved Response Display**: Response text is now always displayed when audio is sent to n8n
+- **Better Debug Information**: Collapsible debug info panel for development
+- **Streamlined UI**: Cleaner button layout and improved user experience
+
+### Key Changes
+
+1. **API Route (`/api/ai/voice`)**:
+   - Better validation of input parameters
+   - Improved response text extraction from n8n
+   - Enhanced error handling and logging
+   - More detailed metadata in responses
+
+2. **Main Page Component**:
+   - Unified `processWithAI` function handles both transcript and audio processing
+   - Removed duplicate audio processing code
+   - Better state management for processing status
+   - Improved error handling with user-friendly messages
+
+3. **VoiceButton Component**:
+   - Removed duplicate play functionality (now handled in main page)
+   - Simplified component structure
+   - Better cleanup and memory management
+
 ## 🚀 Getting Started
 
 ### Prerequisites

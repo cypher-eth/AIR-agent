@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Play, Square } from 'lucide-react';
-import { useState as useLocalState } from 'react';
+import { Mic, MicOff } from 'lucide-react';
 
 interface VoiceButtonProps {
   onVoiceInput: (transcript: string, audioBlob?: Blob) => void;
@@ -16,16 +15,13 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
   const [isSupported, setIsSupported] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [hasRecording, setHasRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioBlobRef = useRef<Blob | null>(null);
-  const audioUrlRef = useRef<string | null>(null);
   const isHoldingRef = useRef(false);
   const finalTranscriptRef = useRef('');
-  const [isLoading, setIsLoading] = useLocalState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Initialize speech recognition and audio recording
   useEffect(() => {
@@ -86,9 +82,7 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
 
     // Cleanup function
     return () => {
-      if (audioUrlRef.current) {
-        URL.revokeObjectURL(audioUrlRef.current);
-      }
+      // Cleanup will be handled by the main component
     };
   }, [onVoiceInput, setIsListening]);
 
@@ -110,14 +104,6 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
         console.log('Audio blob size:', audioBlob.size);
         audioBlobRef.current = audioBlob;
 
-        // Create URL for the audio blob
-        if (audioUrlRef.current) {
-          URL.revokeObjectURL(audioUrlRef.current);
-        }
-        audioUrlRef.current = URL.createObjectURL(audioBlob);
-        console.log('Audio URL:', audioUrlRef.current);
-
-        setHasRecording(true);
         setIsRecording(false);
 
         // Stop all tracks
@@ -147,27 +133,6 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
       console.log('Audio recording stopped');
     }
   }, [isRecording]);
-
-  const playRecording = useCallback(() => {
-    if (audioUrlRef.current && hasRecording) {
-      const audio = new Audio(audioUrlRef.current);
-      setIsPlaying(true);
-      
-      audio.onended = () => {
-        setIsPlaying(false);
-      };
-      
-      audio.onerror = () => {
-        setIsPlaying(false);
-        console.error('Error playing audio');
-      };
-      
-      audio.play().catch(error => {
-        console.error('Error playing audio:', error);
-        setIsPlaying(false);
-      });
-    }
-  }, [hasRecording]);
 
   const startListening = useCallback(() => {
     setIsLoading(true);
@@ -258,37 +223,6 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
 
   return (
     <div className="flex flex-col items-center space-y-4">
-      <div className="flex items-center space-x-4">
-        {/* Play Button */}
-        {hasRecording && (
-          <button
-            className={`
-              relative w-20 h-20 rounded-full font-medium text-white
-              transition-all duration-200 transform
-              ${isPlaying
-                ? 'bg-green-500 hover:bg-green-600 scale-110 shadow-lg shadow-green-500/50' 
-                : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/50'
-              }
-              cursor-pointer
-              active:scale-95
-            `}
-            onClick={playRecording}
-            disabled={isPlaying}
-          >
-            {isPlaying ? (
-              <Square className="w-8 h-8 mx-auto" />
-            ) : (
-              <Play className="w-8 h-8 mx-auto" />
-            )}
-            
-            {/* Pulse animation when playing */}
-            {isPlaying && (
-              <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-20" />
-            )}
-          </button>
-        )}
-      </div>
-      
       <div className="text-center">
         <p className="text-lg font-medium min-h-[1.5em] flex items-center justify-center">
           {isLoading ? (
@@ -298,11 +232,6 @@ export function VoiceButton({ onVoiceInput, isListening, isHolding, setIsListeni
             </svg>
           ) : isListening ? '🎙️ Listening...' : isRecording ? '🎙️ Recording...' : isHolding ? '🎙️ Holding...' : '🎙️ Hold to Talk'}
         </p>
-        {hasRecording && (
-          <p className="text-sm text-green-400 mt-1">
-            {isPlaying ? 'Playing recording...' : 'Click play to hear your recording'}
-          </p>
-        )}
       </div>
       
       {/* Live transcript display */}
