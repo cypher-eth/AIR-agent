@@ -8,6 +8,8 @@ interface SphereProps {
   amplitude: number;
   onVoiceInput: (transcript: string, audioBlob?: Blob) => void;
   small?: boolean;
+  disabled?: boolean;
+  onStateChange?: (state: 'idle' | 'listening') => void;
 }
 
 function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: { isIdle: boolean; isSpeaking: boolean; isListening: boolean; amplitude: number; }) {
@@ -74,7 +76,7 @@ function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: { isIdle
   );
 }
 
-export function Sphere({ amplitude, onVoiceInput, small }: SphereProps) {
+export function Sphere({ amplitude, onVoiceInput, small, disabled = false, onStateChange }: SphereProps) {
   const [isIdle, setIsIdle] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -100,6 +102,7 @@ export function Sphere({ amplitude, onVoiceInput, small }: SphereProps) {
         setIsListening(true);
         setIsIdle(false);
         finalTranscriptRef.current = '';
+        onStateChange?.('listening');
       };
       recognition.onresult = (event: any) => {
         let finalTranscript = '';
@@ -126,11 +129,13 @@ export function Sphere({ amplitude, onVoiceInput, small }: SphereProps) {
         }
         setIsListening(false);
         setIsIdle(true);
+        onStateChange?.('idle');
         onVoiceInput(finalTranscriptRef.current, audioBlobRef.current || undefined);
       };
       recognition.onerror = (event: any) => {
         setIsListening(false);
         setIsIdle(true);
+        onStateChange?.('idle');
       };
       recognitionRef.current = recognition;
     }
@@ -194,6 +199,12 @@ export function Sphere({ amplitude, onVoiceInput, small }: SphereProps) {
     console.log('Pointer down - starting recording');
     e.preventDefault();
     
+    // Prevent interaction if disabled
+    if (disabled) {
+      console.log('Sphere is disabled, ignoring pointer down');
+      return;
+    }
+    
     // Prevent multiple starts
     if (isHoldingRef.current) {
       console.log('Already recording, ignoring pointer down');
@@ -255,7 +266,7 @@ export function Sphere({ amplitude, onVoiceInput, small }: SphereProps) {
     <div
       className={small ? 'relative flex items-center justify-center select-none w-full h-full' : 'relative flex items-center justify-center select-none'}
       style={small ? {} : { width: 240, height: 240 }}
-      {...(!small && {
+      {...(!small && !disabled && {
         onPointerDown: handlePointerDown,
         onPointerUp: handlePointerUp,
         onPointerLeave: handlePointerUp,
@@ -269,11 +280,13 @@ export function Sphere({ amplitude, onVoiceInput, small }: SphereProps) {
       </Canvas>
       {/* Glow effect */}
       <div className={`absolute inset-0 rounded-full blur-xl -z-10 transition-all duration-500 ${
-        isListening 
-          ? 'bg-gradient-to-r from-pink-200/40 to-pink-400/40 scale-110' 
-          : isSpeaking 
-            ? 'bg-gradient-to-r from-purple-400/20 to-blue-400/20' 
-            : 'bg-gradient-to-r from-pink-200/20 to-pink-100/20'
+        disabled
+          ? 'bg-gradient-to-r from-gray-400/20 to-gray-300/20 opacity-50'
+          : isListening 
+            ? 'bg-gradient-to-r from-pink-200/40 to-pink-400/40 scale-110' 
+            : isSpeaking 
+              ? 'bg-gradient-to-r from-purple-400/20 to-blue-400/20' 
+              : 'bg-gradient-to-r from-pink-200/20 to-pink-100/20'
       }`} />
       {/* Additional glow layers for listening state */}
       {isListening && (

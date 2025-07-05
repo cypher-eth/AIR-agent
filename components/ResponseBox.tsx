@@ -7,9 +7,10 @@ interface ResponseBoxProps {
   isSpeaking: boolean;
   onToggleSpeech: () => void;
   onClick: () => void;
+  disabled?: boolean;
 }
 
-export function ResponseBox({ responseText, isSpeaking, onToggleSpeech, onClick }: ResponseBoxProps) {
+export function ResponseBox({ responseText, isSpeaking, onToggleSpeech, onClick, disabled = false }: ResponseBoxProps) {
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const textContainerRef = useRef<HTMLDivElement>(null);
@@ -59,9 +60,9 @@ export function ResponseBox({ responseText, isSpeaking, onToggleSpeech, onClick 
 
   return (
     <div
-      className="w-full max-w-2xl mx-auto mt-8 cursor-pointer"
-      onClick={onClick}
-      title="Click to expand"
+      className={`w-full max-w-2xl mx-auto mt-8 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+      onClick={disabled ? undefined : onClick}
+      title={disabled ? 'Processing...' : 'Click to expand'}
     >
       <div className="bg-black/20 backdrop-blur-sm rounded-lg p-4 border border-white/10 overflow-y-auto max-h-56 min-h-[3em] transition-shadow hover:shadow-lg hover:shadow-blue-500/10">
         <div
@@ -75,9 +76,10 @@ export function ResponseBox({ responseText, isSpeaking, onToggleSpeech, onClick 
         </div>
         <div className="flex justify-end mt-2">
           <button
-            className={`px-3 py-1 rounded text-xs font-medium ${isSpeaking ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'} hover:bg-white/10 transition`}
-            onClick={e => { e.stopPropagation(); onToggleSpeech(); }}
-            title={isSpeaking ? 'Stop speaking' : 'Start speaking'}
+            className={`px-3 py-1 rounded text-xs font-medium ${isSpeaking ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'} transition`}
+            onClick={e => { e.stopPropagation(); if (!disabled) onToggleSpeech(); }}
+            title={disabled ? 'Processing...' : (isSpeaking ? 'Stop speaking' : 'Start speaking')}
+            disabled={disabled}
           >
             {isSpeaking ? 'Stop' : 'Speak'}
           </button>
