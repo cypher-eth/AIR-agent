@@ -44,7 +44,7 @@ function b64toBlob(b64Data: string, contentType: string = '', sliceSize: number 
 }
 
 // Helper to convert base64 to Blob and play audio
-function playBase64Audio(base64: string, mimeType: string = 'audio/mp3'): Promise<void> {
+function playBase64Audio(base64: string, mimeType: string = 'audio/mp3', onAudioCreated?: (audio: HTMLAudioElement) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     try {
       // Validate base64 string
@@ -56,6 +56,9 @@ function playBase64Audio(base64: string, mimeType: string = 'audio/mp3'): Promis
       const audioBlob = b64toBlob(base64, mimeType);
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      
+      // Call the callback to store the audio reference
+      onAudioCreated?.(audio);
       
       audio.onloadeddata = () => {
         console.log('Base64 audio loaded successfully, duration:', audio.duration);
@@ -184,7 +187,9 @@ export default function Home() {
         setStatus('Playing AI audio...');
         
         try {
-          await playBase64Audio(audioData, 'audio/mp3');
+          await playBase64Audio(audioData, 'audio/mp3', (audio) => {
+            currentAudioRef.current = audio;
+          });
           console.log('Base64 audio played successfully');
         } catch (error) {
           console.error('Failed to play base64 audio, falling back to TTS:', error);
@@ -196,6 +201,7 @@ export default function Home() {
           setAppState('idle');
           setAudioAmplitude(0);
           setStatus('Ready');
+          currentAudioRef.current = null;
         }
       } else if (aiResponse.responseAudioUrl) {
         // Fallback: try URL-based audio
@@ -350,7 +356,41 @@ export default function Home() {
     }
   }, []);
 
-  // Toggle speech playback
+  // Toggle AI audio playback
+  const toggleAudio = useCallback(() => {
+    if (appState === 'speaking') {
+      // Stop audio
+      stopCurrentAudio();
+      setAppState('idle');
+      setAudioAmplitude(0);
+      setStatus('Ready');
+    } else {
+      // Start AI audio
+      const audioData = aiDebug?.responseAudioBase64 || aiDebug?.responseAudio;
+      if (audioData && typeof audioData === 'string' && audioData.length > 100 && appState === 'idle') {
+        setAppState('speaking');
+        setStatus('Playing AI audio...');
+        
+        playBase64Audio(audioData, 'audio/mp3', (audio) => {
+          // Store the audio reference so we can stop it later
+          currentAudioRef.current = audio;
+        }).then(() => {
+          setAppState('idle');
+          setAudioAmplitude(0);
+          setStatus('Ready');
+          currentAudioRef.current = null;
+        }).catch((error) => {
+          console.error('Failed to play AI audio:', error);
+          setAppState('idle');
+          setAudioAmplitude(0);
+          setStatus('Ready');
+          currentAudioRef.current = null;
+        });
+      }
+    }
+  }, [appState, aiDebug, stopCurrentAudio]);
+
+  // Toggle text-to-speech playback
   const toggleSpeech = useCallback(() => {
     if (appState === 'speaking') {
       // Stop speaking
@@ -433,6 +473,8 @@ export default function Home() {
             onToggleSpeech={toggleSpeech}
             onClick={() => setShowModal(true)}
             disabled={appState === 'processing'}
+            hasAudioResponse={hasAudioResponse}
+            onToggleAudio={toggleAudio}
           />
         </div>
 

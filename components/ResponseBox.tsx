@@ -8,9 +8,11 @@ interface ResponseBoxProps {
   onToggleSpeech: () => void;
   onClick: () => void;
   disabled?: boolean;
+  hasAudioResponse?: boolean;
+  onToggleAudio?: () => void;
 }
 
-export function ResponseBox({ responseText, isSpeaking, onToggleSpeech, onClick, disabled = false }: ResponseBoxProps) {
+export function ResponseBox({ responseText, isSpeaking, onToggleSpeech, onClick, disabled = false, hasAudioResponse = false, onToggleAudio }: ResponseBoxProps) {
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const textContainerRef = useRef<HTMLDivElement>(null);
@@ -74,14 +76,27 @@ export function ResponseBox({ responseText, isSpeaking, onToggleSpeech, onClick,
             <span className="inline-block w-2 h-6 bg-white/70 animate-pulse ml-1" />
           )}
         </div>
-        <div className="flex justify-end mt-2">
+        <div className="flex justify-end mt-2 gap-2">
+          {/* Audio Play/Stop Button (only show if there's audio response) */}
+          {hasAudioResponse && onToggleAudio && (
+            <button
+              className={`px-3 py-1 rounded text-xs font-medium ${isSpeaking ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'} transition`}
+              onClick={e => { e.stopPropagation(); if (!disabled) onToggleAudio(); }}
+              title={disabled ? 'Processing...' : (isSpeaking ? 'Stop audio' : 'Play audio')}
+              disabled={disabled}
+            >
+              {isSpeaking ? 'Stop' : 'Play'}
+            </button>
+          )}
+          
+          {/* Text-to-Speech Button (always show) */}
           <button
             className={`px-3 py-1 rounded text-xs font-medium ${isSpeaking ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'} transition`}
             onClick={e => { e.stopPropagation(); if (!disabled) onToggleSpeech(); }}
-            title={disabled ? 'Processing...' : (isSpeaking ? 'Stop speaking' : 'Start speaking')}
+            title={disabled ? 'Processing...' : (isSpeaking ? 'Stop TTS' : 'Start TTS')}
             disabled={disabled}
           >
-            {isSpeaking ? 'Stop' : 'Speak'}
+            {isSpeaking ? 'Stop' : 'TTS'}
           </button>
         </div>
       </div>
