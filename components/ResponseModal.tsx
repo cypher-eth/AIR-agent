@@ -40,7 +40,9 @@ export function ResponseModal({
       return;
     }
 
+    let isActive = true;
     const interval = setInterval(() => {
+      if (!isActive) return;
       setCurrentIndex(prev => {
         const newIndex = prev + 1;
         setDisplayedText(responseText.slice(0, newIndex));
@@ -48,7 +50,10 @@ export function ResponseModal({
       });
     }, 50); // Adjust speed as needed
 
-    return () => clearInterval(interval);
+    return () => {
+      isActive = false;
+      clearInterval(interval);
+    };
   }, [isSpeaking, responseText, currentIndex]);
 
   // Auto-scroll to bottom when text is being typed

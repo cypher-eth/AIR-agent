@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { playTextToSpeech, stopTextToSpeech } from '@/lib/audio';
 import { Play, Square, Send } from 'lucide-react';
 import { ResponseModal } from '@/components/ResponseModal';
+import { ResponseBox } from '@/components/ResponseBox';
 
 export type ResponseType = 'info' | 'quiz' | 'correct';
 
@@ -70,9 +71,6 @@ export default function Home() {
       setAiDebug(aiResponse);
       setStatus('Playing AI response...');
 
-      // Show modal with response
-      setShowModal(true);
-
       // Play audio response if available
       if (aiResponse.responseAudioUrl) {
         const audio = new Audio(aiResponse.responseAudioUrl);
@@ -115,9 +113,6 @@ export default function Home() {
       const errorMessage = 'Sorry, I encountered an error processing your request. Please try again.';
       setCurrentResponse(errorMessage);
       setStatus('Error occurred');
-      
-      // Show modal with error
-      setShowModal(true);
       
       // Play error message
       setIsSpeaking(true);
@@ -201,11 +196,9 @@ export default function Home() {
       if (result.success) {
         setCurrentResponse(`N8N Test Successful! Response keys: ${result.responseKeys.join(', ')}`);
         setAiDebug(result);
-        setShowModal(true);
       } else {
         setCurrentResponse(`N8N Test Failed: ${result.error}`);
         setAiDebug(result);
-        setShowModal(true);
       }
     } catch (error) {
       console.error('Error testing n8n:', error);
@@ -264,66 +257,15 @@ export default function Home() {
         />
       </div>
 
-      {/* Control Buttons */}
-      <div className="flex items-center space-x-4 mb-8">
-        {/* Play Recording Button */}
-        <button
-          className={`
-            relative w-20 h-20 rounded-full font-medium text-white
-            transition-all duration-200 transform
-            ${!recordingUrl
-              ? 'bg-gray-400 cursor-not-allowed shadow-lg shadow-gray-400/50'
-              : isPlaying
-                ? 'bg-green-500 hover:bg-green-600 scale-110 shadow-lg shadow-green-500/50' 
-                : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/50'
-            }
-            cursor-pointer
-            active:scale-95
-          `}
-          onClick={playRecording}
-          disabled={isPlaying || !recordingUrl}
-          title="Play last recording"
-        >
-          {isPlaying ? (
-            <Square className="w-8 h-8 mx-auto" />
-          ) : (
-            <Play className="w-8 h-8 mx-auto" />
-          )}
-          {(isPlaying || !recordingUrl) && (
-            <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-20" />
-          )}
-        </button>
+      {/* Response Box below the sphere */}
+      <ResponseBox
+        responseText={currentResponse}
+        isSpeaking={isSpeaking}
+        onToggleSpeech={toggleSpeech}
+        onClick={() => setShowModal(true)}
+      />
 
-        {/* Send to AI Button */}
-        <button
-          className={`
-            relative w-20 h-20 rounded-full font-medium text-white
-            transition-all duration-200 transform
-            ${!recordingUrl
-              ? 'bg-gray-400 cursor-not-allowed shadow-lg shadow-gray-400/50'
-              : isProcessing
-                ? 'bg-blue-500 scale-110 shadow-lg shadow-blue-500/50' 
-                : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/50'
-            }
-            cursor-pointer
-            active:scale-95
-          `}
-          onClick={sendAudioToAI}
-          disabled={isProcessing || !recordingUrl}
-          title="Send audio to AI"
-        >
-          {isProcessing ? (
-            <div className="w-8 h-8 mx-auto border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Send className="w-8 h-8 mx-auto" />
-          )}
-          {(isProcessing || !recordingUrl) && (
-            <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-20" />
-          )}
-        </button>
-      </div>
-
-      {/* Response Modal */}
+      {/* Response Modal (only when showModal is true) */}
       <ResponseModal
         isOpen={showModal}
         onClose={handleCloseModal}
