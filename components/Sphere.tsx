@@ -194,12 +194,16 @@ export function Sphere({ amplitude, onVoiceInput }: SphereProps) {
     isHoldingRef.current = true;
     setIsListening(true);
     setIsIdle(false);
+    console.log('Sphere state: isListening=true, isIdle=false');
+    
     if (recognitionRef.current && isSupported) {
       try {
         // Check if recognition is already active
         if (recognitionRef.current.state === 'inactive') {
+          console.log('Starting speech recognition...');
           recognitionRef.current.start();
         }
+        console.log('Starting audio recording...');
         startAudioRecording();
       } catch (error) {
         console.error('Error starting recognition:', error);
@@ -208,6 +212,7 @@ export function Sphere({ amplitude, onVoiceInput }: SphereProps) {
         isHoldingRef.current = false;
       }
     } else if (!isSupported) {
+      console.log('Speech recognition not supported, starting audio recording only...');
       startAudioRecording();
     }
   };
@@ -218,9 +223,13 @@ export function Sphere({ amplitude, onVoiceInput }: SphereProps) {
     isHoldingRef.current = false;
     setIsListening(false);
     setIsIdle(true);
+    console.log('Sphere state: isListening=false, isIdle=true');
+    
     if (recognitionRef.current && isSupported) {
       try {
+        console.log('Stopping speech recognition...');
         recognitionRef.current.stop();
+        console.log('Stopping audio recording...');
         stopAudioRecording();
       } catch (error) {
         console.error('Error stopping recognition:', error);
@@ -228,6 +237,7 @@ export function Sphere({ amplitude, onVoiceInput }: SphereProps) {
         setIsIdle(true);
       }
     } else {
+      console.log('Stopping audio recording (no speech recognition)...');
       stopAudioRecording();
     }
   };

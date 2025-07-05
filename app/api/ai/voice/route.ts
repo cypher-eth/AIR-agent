@@ -4,9 +4,9 @@ export async function POST(request: NextRequest) {
   try {
     const { transcript, audioBlob } = await request.json();
 
-    if (!transcript || typeof transcript !== 'string') {
+    if ((!transcript || typeof transcript !== 'string') && !audioBlob) {
       return NextResponse.json(
-        { error: 'Transcript is required' },
+        { error: 'Transcript or audioBlob is required' },
         { status: 400 }
       );
     }
