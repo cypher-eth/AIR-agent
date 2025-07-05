@@ -66,7 +66,7 @@ export default function Home() {
       console.log('AI Response:', result);
       setCurrentResponse(result.responseText);
       setAiDebug(result);
-      setStatus('Playing AI response...');
+      setStatus('Playing AI response..');
 
       // Play audio response
       if (result.responseAudioUrl) {
