@@ -154,6 +154,12 @@ export function ResponseModal({
                 onClick={() => {
                   setDisplayedText(responseText);
                   setCurrentIndex(responseText.length);
+                  // Scroll to bottom after showing all text
+                  setTimeout(() => {
+                    if (isAutoScrolling && textContainerRef.current) {
+                      textContainerRef.current.scrollTop = textContainerRef.current.scrollHeight;
+                    }
+                  }, 0);
                 }}
                 title="Skip to end"
               >

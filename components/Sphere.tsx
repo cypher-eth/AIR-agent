@@ -54,10 +54,18 @@ function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: { isIdle
       {/* Main sphere */}
       <mesh ref={meshRef} position={[0, 0, 0]}>
         <sphereGeometry args={[1, 32, 32]} />
-        <meshStandardMaterial
-          color={isIdle || isListening ? "#fde4ec" : "#6366f1"}
-          roughness={0.2}
-          metalness={0.4}
+        <meshPhysicalMaterial
+          color={isIdle || isListening ? "#e0e7ef" : "#6366f1"}
+          roughness={0.05}
+          metalness={0.1}
+          transmission={0.85}
+          thickness={0.7}
+          ior={1.3}
+          transparent={true}
+          opacity={0.65}
+          clearcoat={1}
+          clearcoatRoughness={0.05}
+          reflectivity={0.5}
           emissive={isSpeaking ? "#6366f1" : "#000000"}
           emissiveIntensity={isSpeaking ? amplitude * 0.5 : 0}
         />

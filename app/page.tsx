@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { playTextToSpeech } from '@/lib/audio';
+import { playTextToSpeech, stopTextToSpeech } from '@/lib/audio';
 import { Play, Square, Send } from 'lucide-react';
 import { ResponseModal } from '@/components/ResponseModal';
 
@@ -237,6 +237,14 @@ export default function Home() {
     }
   };
 
+  // Modal close handler that also stops speech
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setIsSpeaking(false);
+    setAudioAmplitude(0);
+    stopTextToSpeech();
+  };
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4">
       {/* Status Display */}
@@ -318,7 +326,7 @@ export default function Home() {
       {/* Response Modal */}
       <ResponseModal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={handleCloseModal}
         responseText={currentResponse}
         isSpeaking={isSpeaking}
         onToggleSpeech={toggleSpeech}
