@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       const rawResponse = await n8nResponse.text();
       return NextResponse.json({
         error: 'Failed to parse n8n response as JSON',
-        parseError: parseError.message,
+        parseError: parseError instanceof Error ? parseError.message : String(parseError),
         rawResponse,
       }, { status: 500 });
     }
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Test n8n error:', error);
     return NextResponse.json(
-      { error: 'Test failed', details: error.message },
+      { error: 'Test failed', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

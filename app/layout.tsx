@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'AI Support WebApp',
+  title: 'Cannes AirAgent',
   description: 'Interactive AI support with voice interface and Web3 integration',
 };
 
