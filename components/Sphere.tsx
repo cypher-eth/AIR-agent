@@ -14,29 +14,65 @@ interface SphereProps {
 
 function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: { isIdle: boolean; isSpeaking: boolean; isListening: boolean; amplitude: number; }) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const distortionRef = useRef<THREE.Mesh>(null);
 
   useFrame((state) => {
     if (!meshRef.current) return;
 
     const time = state.clock.getElapsedTime();
 
+    // Base breathing animation for all states
+    const baseBreathing = 1 + Math.sin(time * 0.8) * 0.03;
+    
+    // Subtle floating movement
+    const floatY = Math.sin(time * 0.6) * 0.02;
+    
+    // Surface distortion animation
+    const distortionIntensity = isListening ? 0.15 : isSpeaking ? 0.1 : 0.05;
+    const distortionX = Math.sin(time * 1.2) * distortionIntensity;
+    const distortionY = Math.cos(time * 0.9) * distortionIntensity;
+    const distortionZ = Math.sin(time * 1.5) * distortionIntensity;
+
     if (isListening) {
-      // Pulsing animation when listening (half speed)
-      const pulseScale = 1 + Math.sin(time * 1.5) * 0.15;
+      // Enhanced pulsing animation when listening
+      const pulseScale = baseBreathing * (1 + Math.sin(time * 1.8) * 0.2);
       meshRef.current.scale.setScalar(pulseScale);
-      meshRef.current.rotation.y = time * 0.1;
+      meshRef.current.rotation.y = time * 0.15;
+      meshRef.current.rotation.x = Math.sin(time * 0.7) * 0.05;
+      meshRef.current.position.y = floatY;
+      
+      // Add wobble effect
+      meshRef.current.rotation.z = Math.sin(time * 1.1) * 0.03;
     } else if (isIdle) {
-      // Gentle breathing animation
-      const scale = 1 + Math.sin(time * 0.5) * 0.05;
+      // Gentle breathing and floating animation
+      const scale = baseBreathing;
       meshRef.current.scale.setScalar(scale);
-      meshRef.current.rotation.y = time * 0.1;
+      meshRef.current.rotation.y = time * 0.08;
+      meshRef.current.rotation.x = Math.sin(time * 0.5) * 0.02;
+      meshRef.current.position.y = floatY;
+      
+      // Subtle wobble
+      meshRef.current.rotation.z = Math.sin(time * 0.6) * 0.01;
     } else if (isSpeaking) {
-      // Dynamic speaking animation based on amplitude
-      const speakScale = 1 + amplitude * 0.3;
-      const breathScale = 1 + Math.sin(time * 2) * 0.02;
+      // Dynamic speaking animation with amplitude
+      const speakScale = baseBreathing * (1 + amplitude * 0.4);
+      const breathScale = 1 + Math.sin(time * 2.2) * 0.03;
       meshRef.current.scale.setScalar(speakScale * breathScale);
-      meshRef.current.rotation.y = time * 0.3;
-      meshRef.current.rotation.x = Math.sin(time * 3) * 0.1;
+      meshRef.current.rotation.y = time * 0.4;
+      meshRef.current.rotation.x = Math.sin(time * 3.2) * 0.15;
+      meshRef.current.position.y = floatY + Math.sin(time * 4) * 0.01;
+      
+      // Enhanced wobble for speaking
+      meshRef.current.rotation.z = Math.sin(time * 2.8) * 0.08;
+    }
+
+    // Apply surface distortion
+    if (distortionRef.current) {
+      distortionRef.current.position.x = distortionX;
+      distortionRef.current.position.y = distortionY;
+      distortionRef.current.position.z = distortionZ;
+      distortionRef.current.rotation.x = time * 0.3;
+      distortionRef.current.rotation.y = time * 0.2;
     }
   });
 
@@ -44,32 +80,55 @@ function AnimatedSphere({ isIdle, isSpeaking, isListening, amplitude }: { isIdle
     <>
       {/* Inner glow sphere for listening state */}
       {isListening && (
-        <mesh position={[0, 0, 0]} scale={[1.2, 1.2, 1.2]}>
+        <mesh position={[0, 0, 0]} scale={[1.3, 1.3, 1.3]}>
           <sphereGeometry args={[1, 32, 32]} />
           <meshBasicMaterial
             color="#f9a8d4"
             transparent
-            opacity={0.3}
+            opacity={0.4}
           />
         </mesh>
       )}
+      
+      {/* Surface distortion layer */}
+      <mesh ref={distortionRef} position={[0, 0, 0]}>
+        <sphereGeometry args={[1.02, 64, 64]} />
+        <meshBasicMaterial
+          color={isIdle || isListening ? "#e0e7ef" : "#6366f1"}
+          transparent
+          opacity={0.1}
+          wireframe={false}
+        />
+      </mesh>
+      
       {/* Main sphere */}
       <mesh ref={meshRef} position={[0, 0, 0]}>
-        <sphereGeometry args={[1, 32, 32]} />
+        <sphereGeometry args={[1, 64, 64]} />
         <meshPhysicalMaterial
           color={isIdle || isListening ? "#e0e7ef" : "#6366f1"}
-          roughness={0.05}
-          metalness={0.1}
-          transmission={0.85}
-          thickness={0.7}
-          ior={1.3}
+          roughness={0.02}
+          metalness={0.15}
+          transmission={0.9}
+          thickness={0.8}
+          ior={1.4}
           transparent={true}
-          opacity={0.65}
+          opacity={0.7}
           clearcoat={1}
-          clearcoatRoughness={0.05}
-          reflectivity={0.5}
-          emissive={isSpeaking ? "#6366f1" : "#000000"}
-          emissiveIntensity={isSpeaking ? amplitude * 0.5 : 0}
+          clearcoatRoughness={0.02}
+          reflectivity={0.8}
+          emissive={isSpeaking ? "#6366f1" : isListening ? "#f9a8d4" : "#e0e7ef"}
+          emissiveIntensity={isSpeaking ? amplitude * 0.6 : isListening ? 0.3 : 0.1}
+        />
+      </mesh>
+      
+      {/* Outer glow ring */}
+      <mesh position={[0, 0, 0]} scale={[1.1, 1.1, 1.1]}>
+        <ringGeometry args={[0.95, 1.05, 32]} />
+        <meshBasicMaterial
+          color={isIdle || isListening ? "#e0e7ef" : "#6366f1"}
+          transparent
+          opacity={0.2}
+          side={THREE.DoubleSide}
         />
       </mesh>
     </>

@@ -34,14 +34,16 @@ export function Header({ status }: HeaderProps) {
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center space-x-2">
+          {/* <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">AI</span>
             </div>
-          </div>
+          </div> */}
 
           {/* Status - Centered */}
-          <div className="absolute left-1/2 transform -translate-x-1/2">
+          <div className=" ">
+          {/* <div className="absolute left-1/2 transform -translate-x-1/2"> */}
+
             <div className="bg-black/20 backdrop-blur-sm rounded-lg px-4 py-2 border border-white/10">
               <p className="text-center text-sm text-white/80">
                 Status: <span className="font-medium text-white">{status}</span>
@@ -56,7 +58,7 @@ export function Header({ status }: HeaderProps) {
               className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 transition-colors"
             >
               <span className="text-white/90 text-sm font-mono">
-                {address.slice(0, 6)}...{address.slice(-4)}
+                {address.slice(0, 4)}..{address.slice(-4)}
               </span>
               <ChevronDown className={`w-4 h-4 text-white/70 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
