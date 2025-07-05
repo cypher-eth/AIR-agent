@@ -19,6 +19,64 @@ export interface AIResponse {
 // Dynamically import Sphere with SSR disabled
 const Sphere = dynamic(() => import('@/components/Sphere').then(mod => mod.Sphere), { ssr: false });
 
+// Helper to convert base64 to Blob
+function b64toBlob(b64Data: string, contentType: string = '', sliceSize: number = 512) {
+  const byteCharacters = atob(b64Data);
+  const byteArrays = [];
+  for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+    const slice = byteCharacters.slice(offset, offset + sliceSize);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+  return new Blob(byteArrays, { type: contentType });
+}
+
+// Helper to convert base64 to Blob and play audio
+function playBase64Audio(base64: string, mimeType: string = 'audio/mp3'): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      // Validate base64 string
+      if (!base64 || typeof base64 !== 'string' || base64.length < 100) {
+        reject(new Error('Invalid or empty base64 audio data'));
+        return;
+      }
+
+      const audioBlob = b64toBlob(base64, mimeType);
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.onloadeddata = () => {
+        console.log('Base64 audio loaded successfully, duration:', audio.duration);
+      };
+      
+      audio.onerror = (e) => {
+        console.error('Error playing base64 audio:', e);
+        URL.revokeObjectURL(audioUrl);
+        reject(new Error('Failed to play audio'));
+      };
+      
+      audio.onended = () => {
+        console.log('Base64 audio playback ended');
+        URL.revokeObjectURL(audioUrl);
+        resolve();
+      };
+      
+      audio.play().catch((error) => {
+        console.error('Error starting audio playback:', error);
+        URL.revokeObjectURL(audioUrl);
+        reject(error);
+      });
+    } catch (error) {
+      console.error('Error creating audio from base64:', error);
+      reject(error);
+    }
+  });
+}
+
 export default function Home() {
   const [isListening, setIsListening] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
@@ -59,40 +117,68 @@ export default function Home() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to get AI response: ${response.status}`);
+      let aiResponse;
+      let errorMessage = '';
+      try {
+        aiResponse = await response.json();
+      } catch (e) {
+        aiResponse = null;
+      }
+      if (!response.ok || aiResponse?.error) {
+        errorMessage = aiResponse?.error || 'Sorry, something went wrong with the AI service. Please try again later.';
+        setCurrentResponse(errorMessage);
+        setStatus('Error occurred');
+        setIsSpeaking(true);
+        await playTextToSpeech(errorMessage);
+        setIsSpeaking(false);
+        setStatus('Ready');
+        return;
       }
 
-      const aiResponse: AIResponse = await response.json();
-      console.log('AI Response:', aiResponse);
-      
       // Always display the response text
       setCurrentResponse(aiResponse.responseText);
       setAiDebug(aiResponse);
       setStatus('Playing AI response...');
+      
+      // Debug: Log the AI response structure
+      console.log('AI Response structure:', {
+        hasResponseText: !!aiResponse.responseText,
+        hasResponseAudio: !!aiResponse.responseAudio,
+        hasResponseAudioBase64: !!aiResponse.responseAudioBase64,
+        responseAudioLength: aiResponse.responseAudio?.length || 0,
+        responseAudioBase64Length: aiResponse.responseAudioBase64?.length || 0,
+        responseAudioType: typeof aiResponse.responseAudio,
+        responseAudioBase64Type: typeof aiResponse.responseAudioBase64,
+        allKeys: Object.keys(aiResponse)
+      });
 
       // Play audio response if available
-      if (aiResponse.responseAudioUrl) {
-        const audio = new Audio(aiResponse.responseAudioUrl);
+      const audioData = aiResponse.responseAudioBase64 || aiResponse.responseAudio;
+      
+      if (audioData && typeof audioData === 'string' && audioData.length > 100) {
+        // Play audio from base64
+        console.log('Found base64 audio data, length:', audioData.length);
         setIsSpeaking(true);
+        setStatus('Playing AI audio...');
         
-        const analyseAudio = () => {
-          setAudioAmplitude(Math.random() * 0.5 + 0.3);
-        };
-        
-        const intervalId = setInterval(analyseAudio, 100);
-        
-        audio.onended = () => {
+        try {
+          await playBase64Audio(audioData, 'audio/mp3');
+          console.log('Base64 audio played successfully');
+        } catch (error) {
+          console.error('Failed to play base64 audio, falling back to TTS:', error);
+          // Fall back to text-to-speech if base64 audio fails
+          setIsSpeaking(true);
+          await playTextToSpeech(aiResponse.responseText, (amplitude) => {
+            setAudioAmplitude(amplitude);
+          });
+        } finally {
           setIsSpeaking(false);
           setAudioAmplitude(0);
-          clearInterval(intervalId);
           setStatus('Ready');
-        };
-        
-        await audio.play();
+        }
       } else {
-        // Use Web Speech API for text-to-speech
-        console.log('Playing text-to-speech...');
+        // Use Web Speech API for text-to-speech as fallback
+        console.log('No valid base64 audio found, using text-to-speech...');
         setIsSpeaking(true);
         await playTextToSpeech(aiResponse.responseText, (amplitude) => {
           setAudioAmplitude(amplitude);
