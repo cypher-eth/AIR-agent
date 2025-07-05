@@ -105,24 +105,37 @@ export async function POST(request: NextRequest) {
     // Add detailed logging of the actual response
     console.log('Full n8n response:', JSON.stringify(n8nResult, null, 2));
     console.log('n8n response keys:', Object.keys(n8nResult));
+    console.log('n8n response type:', typeof n8nResult);
+    console.log('n8n response length:', Array.isArray(n8nResult) ? n8nResult.length : 'not an array');
 
     // Extract response text with proper fallback logic
     let responseText = '';
     if (n8nResult.responseText) {
       responseText = n8nResult.responseText;
+      console.log('Found responseText:', responseText);
+    } else if (n8nResult.output) {
+      responseText = n8nResult.output;
+      console.log('Found output:', responseText);
     } else if (n8nResult.message) {
       responseText = n8nResult.message;
+      console.log('Found message:', responseText);
     } else if (n8nResult.text) {
       responseText = n8nResult.text;
+      console.log('Found text:', responseText);
     } else if (n8nResult.content) {
       responseText = n8nResult.content;
+      console.log('Found content:', responseText);
     } else if (n8nResult.answer) {
       responseText = n8nResult.answer;
+      console.log('Found answer:', responseText);
     } else if (n8nResult.response) {
       responseText = n8nResult.response;
+      console.log('Found response:', responseText);
     } else if (typeof n8nResult === 'string') {
       responseText = n8nResult;
+      console.log('Using string response:', responseText);
     } else {
+      console.log('No response text found in any expected field');
       responseText = 'No response text received from AI';
     }
 
